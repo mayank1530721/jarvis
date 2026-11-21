@@ -281,6 +281,16 @@
   form input::placeholder { color:#668b98; }
   form button { min-width:82px; }
   .actions button { border-color:rgba(82,213,250,.2); }
+  .voice-settings { margin-top:14px; padding:13px; border:1px solid rgba(76,216,255,.2); border-radius:10px; background:linear-gradient(135deg,rgba(8,34,47,.7),rgba(3,14,23,.72)); }
+  .voice-heading { display:flex; justify-content:space-between; align-items:center; color:var(--c); font-size:10px; letter-spacing:2px; margin-bottom:10px; }
+  .voice-heading small { color:var(--muted); font-size:8px; }
+  .voice-adjust { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .voice-adjust label { display:flex; justify-content:space-between; gap:8px; }
+  .voice-adjust label span { color:var(--c); }
+  .voice-settings input[type=range] { width:100%; accent-color:var(--c); padding:0; }
+  .voice-settings select { width:100%; }
+  #sPreview { margin-top:10px; width:100%; border:1px solid rgba(76,216,255,.3); color:var(--c); background:rgba(76,216,255,.08); padding:9px; cursor:pointer; }
+  .voice-settings > small { display:block; margin-top:8px; line-height:1.5; }
   .actions button:focus-visible, form button:focus-visible, form input:focus-visible { outline:2px solid var(--c); outline-offset:3px; }
   @keyframes statusPulse { 0%,100% { opacity:.55; transform:scale(.88); } 50% { opacity:1; transform:scale(1.15); } }
   @keyframes reticleBreathe { 0%,100% { opacity:.62; scale:.97; } 50% { opacity:1; scale:1.035; } }
@@ -369,6 +379,17 @@
   <input type="text" id="sName">
   <label>Jarvis personality</label>
   <textarea id="sPersona"></textarea>
+  <div class="voice-settings">
+    <div class="voice-heading">VOICE PROFILE <small>LOCAL SPEECH ENGINE</small></div>
+    <label for="sVoice">Voice</label>
+    <select id="sVoice"><option value="">Loading available voices…</option></select>
+    <div class="voice-adjust">
+      <div><label for="sRate">Speaking pace <span id="sRateValue">0.92×</span></label><input id="sRate" type="range" min="0.75" max="1.15" step="0.01" value="0.92"></div>
+      <div><label for="sPitch">Pitch <span id="sPitchValue">0.82</span></label><input id="sPitch" type="range" min="0.65" max="1.15" step="0.01" value="0.82"></div>
+    </div>
+    <button id="sPreview" type="button">▶ Preview JARVIS voice</button>
+    <small>Available voices depend on Windows and your browser. Some voices may need to be installed in Windows settings.</small>
+  </div>
   <div class="drow"><button id="sCancel" type="button">Cancel</button><button class="primary" id="sSave" type="button">Save</button></div>
 </dialog>
 
@@ -596,16 +617,54 @@ requestAnimationFrame(frame);
 
 // ---------- speech out ----------
 let currentUtterance = null;
+const voicePrefs = { voiceURI:"", rate:0.92, pitch:0.82, ...store.get("jarvis.voice", {}) };
+let availableVoices = [];
+function refreshVoiceOptions() {
+  if (!("speechSynthesis" in window)) return;
+  availableVoices = speechSynthesis.getVoices();
+  const select = $("sVoice");
+  if (!select) return;
+  const previous = voicePrefs.voiceURI || select.value;
+  select.innerHTML = "";
+  const preferred = availableVoices.filter(v => /^en(-|_)/i.test(v.lang));
+  const ordered = [...preferred, ...availableVoices.filter(v => !preferred.includes(v))];
+  if (!ordered.length) {
+    select.add(new Option("No system voices found", ""));
+    return;
+  }
+  select.add(new Option("Automatic · best available English voice", ""));
+  for (const v of ordered) select.add(new Option(v.name + " · " + v.lang + (v.default ? " · default" : ""), v.voiceURI));
+  select.value = ordered.some(v => v.voiceURI === previous) ? previous : "";
+}
+function selectedVoice() {
+  const all = availableVoices.length ? availableVoices : speechSynthesis.getVoices();
+  if (voicePrefs.voiceURI) {
+    const exact = all.find(v => v.voiceURI === voicePrefs.voiceURI);
+    if (exact) return exact;
+  }
+  const english = all.filter(v => /^en(-|_)/i.test(v.lang));
+  return english.find(v => /natural|neural|google|microsoft/i.test(v.name)) || english.find(v => /male/i.test(v.name)) || english[0] || all[0] || null;
+}
 function speak(text) {
   if (!speakOn || !("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
-  const clean = text.replace(/[*_`#>]/g, "");
+  const clean = String(text).replace(/[*_`#>]/g, "").replace(/\s{2,}/g, " ").trim();
+  if (!clean) return;
   const u = new SpeechSynthesisUtterance(clean);
+  const voice = selectedVoice();
+  if (voice) u.voice = voice;
+  u.rate = Number(voicePrefs.rate) || 0.92;
+  u.pitch = Number(voicePrefs.pitch) || 0.82;
+  u.volume = 1;
   currentUtterance = u;
   u.onstart = () => { if (currentUtterance === u) { speaking = true; setState("speaking"); } };
   const done = () => { if (currentUtterance === u) { speaking = false; setState(busy ? "thinking" : "idle"); } };
   u.onend = done; u.onerror = done;
   speechSynthesis.speak(u);
+}
+if ("speechSynthesis" in window) {
+  refreshVoiceOptions();
+  speechSynthesis.onvoiceschanged = refreshVoiceOptions;
 }
 function paintSpeakBtn() {
   $("speakBtn").textContent = "Voice: " + (speakOn ? "on" : "off");
@@ -887,9 +946,26 @@ $("setBtn").onclick = () => {
   $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base;
   $("sFallbacks").value = c.fallbacks;
   $("sName").value = c.name; $("sPersona").value = c.persona;
+  refreshVoiceOptions();
+  $("sVoice").value = voicePrefs.voiceURI;
+  $("sRate").value = voicePrefs.rate; $("sPitch").value = voicePrefs.pitch;
+  paintVoiceValues();
   $("settings").showModal();
 };
 $("sCancel").onclick = () => $("settings").close();
+function paintVoiceValues() {
+  $("sRateValue").textContent = Number($("sRate").value).toFixed(2) + "×";
+  $("sPitchValue").textContent = Number($("sPitch").value).toFixed(2);
+}
+$("sRate").oninput = paintVoiceValues;
+$("sPitch").oninput = paintVoiceValues;
+$("sPreview").onclick = () => {
+  voicePrefs.voiceURI = $("sVoice").value;
+  voicePrefs.rate = Number($("sRate").value);
+  voicePrefs.pitch = Number($("sPitch").value);
+  speakOn = true; store.set("jarvis.speak", true); paintSpeakBtn();
+  speak("Good evening. All systems are online. How may I assist you?");
+};
 $("sLocal").onclick = () => {
   $("sBase").value = "http://localhost:11434/v1";
   $("sFallbacks").value = "";
@@ -903,6 +979,10 @@ $("sSave").onclick = () => {
     base: $("sBase").value.trim() || DEFAULTS.base, fallbacks: $("sFallbacks").value.trim(),
     name: $("sName").value.trim(),
     persona: $("sPersona").value.trim() || DEFAULTS.persona });
+  voicePrefs.voiceURI = $("sVoice").value;
+  voicePrefs.rate = Number($("sRate").value);
+  voicePrefs.pitch = Number($("sPitch").value);
+  store.set("jarvis.voice", voicePrefs);
   $("settings").close();
   add("sys", "Settings saved.");
   renderVitals();
