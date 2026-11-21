@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis</title>
+<style>
+  :root { --bg:#0b1220; --panel:#121b2e; --line:#223152; --text:#e6edf7; --dim:#8a9bb8; --accent:#3ad1ff; --me:#1c3b5a; }
+  * { box-sizing: border-box; }
+  body { margin:0; height:100vh; display:flex; flex-direction:column; background:var(--bg); color:var(--text);
+         font:16px/1.5 system-ui, Segoe UI, Roboto, sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); background:var(--panel); }
+  header h1 { font-size:18px; margin:0; letter-spacing:3px; color:var(--accent); flex:1; }
+  header button { background:none; border:1px solid var(--line); color:var(--dim); padding:6px 10px; border-radius:8px; cursor:pointer; }
+  header button.on { color:var(--accent); border-color:var(--accent); }
+  #log { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .msg { max-width:min(720px, 90%); padding:10px 14px; border-radius:14px; white-space:pre-wrap; word-wrap:break-word; }
+  .me { align-self:flex-end; background:var(--me); }
+  .ai { align-self:flex-start; background:var(--panel); border:1px solid var(--line); }
+  .sys { align-self:center; color:var(--dim); font-size:13px; }
+  form { display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--line); background:var(--panel); }
+  input[type=text], input[type=password] { flex:1; background:var(--bg); border:1px solid var(--line); color:var(--text);
+         padding:10px 12px; border-radius:10px; font:inherit; }
+  form button { background:var(--accent); color:#04202b; border:0; padding:0 16px; border-radius:10px; font-weight:600; cursor:pointer; }
+  form button.mic { background:var(--panel); color:var(--accent); border:1px solid var(--accent); }
+  form button.mic.rec { background:#ff4d6d; color:#fff; border-color:#ff4d6d; }
+  dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:14px; width:min(480px, 92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.6); }
+  dialog label { display:block; margin:12px 0 4px; color:var(--dim); font-size:13px; }
+  dialog input, dialog textarea { width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+         padding:8px 10px; border-radius:8px; font:inherit; }
+  dialog textarea { min-height:90px; }
+  .row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+  .row button { padding:8px 14px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--text); cursor:pointer; }
+  .row button.primary { background:var(--accent); color:#04202b; border:0; font-weight:600; }
+  small { color:var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>JARVIS</h1>
+  <button id="speakBtn" title="Speak replies aloud">Voice: off</button>
+  <button id="memBtn">Memory</button>
+  <button id="setBtn">Settings</button>
+</header>
+
+<div id="log"></div>
+
+<form id="form">
+  <button type="button" class="mic" id="micBtn" title="Talk to Jarvis">Mic</button>
+  <input type="text" id="box" placeholder="Talk to Jarvis..." autocomplete="off">
+  <button type="submit">Send</button>
+</form>
+
+<dialog id="settings">
+  <h3 style="margin-top:0">Settings</h3>
+  <label>API key (stored only in this browser)</label>
+  <input type="password" id="sKey" placeholder="paste your key">
+  <label>Model</label>
+  <input type="text" id="sModel">
+  <label>API base URL (any OpenAI-compatible service)</label>
+  <input type="text" id="sBase">
+  <small>Default is Groq (free). Change these three fields to switch provider later.</small>
+  <label>Your name</label>
+  <input type="text" id="sName">
+  <label>Jarvis personality</label>
+  <textarea id="sPersona"></textarea>
+  <div class="row"><button id="sCancel" type="button">Cancel</button><button class="primary" id="sSave" type="button">Save</button></div>
+</dialog>
+
+<dialog id="memory">
+  <h3 style="margin-top:0">What Jarvis remembers</h3>
+  <small>One fact per line. Say "remember that..." to Jarvis, or edit here.</small>
+  <label>Memories</label>
+  <textarea id="mText" style="min-height:200px"></textarea>
+  <div class="row"><button id="mCancel" type="button">Cancel</button><button class="primary" id="mSave" type="button">Save</button></div>
+</dialog>
+
+<script>
+"use strict";
+
+// ---------- storage helpers ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+const DEFAULTS = {
+  key: "",
+  model: "llama-3.3-70b-versatile",
+  base: "https://api.groq.com/openai/v1",
+  name: "",
+  persona: "You are Jarvis, a loyal, quick-witted personal AI assistant. Be concise, warm and a little dry-humoured. " +
+           "Prefer short answers, especially since replies may be spoken aloud."
+};
+const cfg = () => ({ ...DEFAULTS, ...store.get("jarvis.cfg", {}) });
+let memories = store.get("jarvis.memories", []);   // array of strings
+let history  = store.get("jarvis.history", []);    // API-format messages
+let speakOn  = store.get("jarvis.speak", false);
+
+// ---------- UI ----------
+const $ = id => document.getElementById(id);
+const log = $("log");
+
+function add(cls, text) {
+  const d = document.createElement("div");
+  d.className = "msg " + cls;
+  d.textContent = text;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+  return d;
+}
+
+function renderHistory() {
+  log.innerHTML = "";
+  for (const m of history) {
+    if (m.role === "user") add("me", m.content);
+    else if (m.role === "assistant" && m.content) add("ai", m.content);
+  }
+  if (!history.length) add("sys", "Jarvis online. Open Settings and paste your API key to begin.");
+}
+
+// ---------- speech out ----------
+function speak(text) {
+  if (!speakOn || !("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const clean = text.replace(/[*_`#>]/g, "");
+  const u = new SpeechSynthesisUtterance(clean);
+  speechSynthesis.speak(u);
+}
+function paintSpeakBtn() {
+  $("speakBtn").textContent = "Voice: " + (speakOn ? "on" : "off");
+  $("speakBtn").classList.toggle("on", speakOn);
+}
+$("speakBtn").onclick = () => {
+  speakOn = !speakOn; store.set("jarvis.speak", speakOn); paintSpeakBtn();
+  if (!speakOn && "speechSynthesis" in window) speechSynthesis.cancel();
+};
+
+// ---------- speech in ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+$("micBtn").onclick = () => {
+  if (!SR) { add("sys", "Voice input needs Chrome or Edge."); return; }
+  if (rec) { rec.stop(); return; }
+  rec = new SR();
+  rec.lang = navigator.language || "en-IN";
+  rec.interimResults = false;
+  rec.onstart = () => $("micBtn").classList.add("rec");
+  rec.onend = () => { $("micBtn").classList.remove("rec"); rec = null; };
+  rec.onerror = e => add("sys", "Mic error: " + e.error);
+  rec.onresult = e => {
+    const t = e.results[0][0].transcript;
+    speakOn = true; store.set("jarvis.speak", true); paintSpeakBtn(); // talk to it, it talks back
+    send(t);
+  };
+  rec.start();
+};
+
+// ---------- tools Jarvis can use ----------
+const tools = [
+  { type: "function", function: { name: "get_time",
+      description: "Get the current local date and time.", parameters: { type: "object", properties: {} } } },
+  { type: "function", function: { name: "open_website",
+      description: "Open a website in a new browser tab.",
+      parameters: { type: "object", properties: { url: { type: "string", description: "Full URL, e.g. https://youtube.com" } }, required: ["url"] } } },
+  { type: "function", function: { name: "search_web",
+      description: "Open a Google search for a query in a new tab.",
+      parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
+  { type: "function", function: { name: "remember",
+      description: "Save a fact about the user to long-term memory. Use when the user asks you to remember something.",
+      parameters: { type: "object", properties: { fact: { type: "string" } }, required: ["fact"] } } },
+  { type: "function", function: { name: "set_timer",
+      description: "Set a timer that alerts the user when it ends.",
+      parameters: { type: "object", properties: { seconds: { type: "number" }, label: { type: "string" } }, required: ["seconds"] } } }
+];
+
+const toolImpl = {
+  get_time: () => new Date().toString(),
+  open_website: ({ url }) => {
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    const w = window.open(url, "_blank", "noopener");
+    return w ? "Opened " + url : "The browser blocked the popup. Ask the user to allow popups for this page.";
+  },
+  search_web: ({ query }) => {
+    const w = window.open("https://www.google.com/search?q=" + encodeURIComponent(query), "_blank", "noopener");
+    return w ? "Opened search for: " + query : "The browser blocked the popup. Ask the user to allow popups for this page.";
+  },
+  remember: ({ fact }) => {
+    memories.push(fact); store.set("jarvis.memories", memories); return "Saved.";
+  },
+  set_timer: ({ seconds, label }) => {
+    setTimeout(() => {
+      const msg = "Timer finished" + (label ? ": " + label : "") + ".";
+      add("ai", msg); speak(msg);
+    }, Math.max(1, seconds) * 1000);
+    return "Timer set for " + seconds + " seconds.";
+  }
+};
+
+// ---------- talking to the model ----------
+function systemPrompt() {
+  const c = cfg();
+  let s = c.persona;
+  if (c.name) s += "\nThe user's name is " + c.name + ".";
+  if (memories.length) s += "\nThings you remember about the user:\n- " + memories.join("\n- ");
+  s += "\nCurrent time: " + new Date().toString();
+  return s;
+}
+
+async function callModel(messages) {
+  const c = cfg();
+  const res = await fetch(c.base.replace(/\/+$/, "") + "/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + c.key },
+    body: JSON.stringify({ model: c.model, messages, tools, tool_choice: "auto" })
+  });
+  if (!res.ok) {
+    let detail = ""; try { detail = (await res.json()).error?.message || ""; } catch {}
+    throw new Error("API error " + res.status + (detail ? ": " + detail : ""));
+  }
+  return (await res.json()).choices[0].message;
+}
+
+let busy = false;
+async function send(text) {
+  text = text.trim();
+  if (!text || busy) return;
+  if (!cfg().key) { add("sys", "Open Settings and paste your API key first."); return; }
+  busy = true;
+  add("me", text);
+  history.push({ role: "user", content: text });
+  const thinking = add("sys", "...");
+  try {
+    for (let step = 0; step < 5; step++) {
+      const msg = await callModel([{ role: "system", content: systemPrompt() }, ...history.slice(-30)]);
+      history.push(msg);
+      if (msg.tool_calls && msg.tool_calls.length) {
+        for (const call of msg.tool_calls) {
+          let out;
+          try {
+            const args = JSON.parse(call.function.arguments || "{}");
+            out = String(toolImpl[call.function.name] ? toolImpl[call.function.name](args) : "Unknown tool.");
+          } catch (e) { out = "Tool failed: " + e.message; }
+          history.push({ role: "tool", tool_call_id: call.id, content: out });
+        }
+        continue;
+      }
+      thinking.remove();
+      add("ai", msg.content || "");
+      speak(msg.content || "");
+      break;
+    }
+  } catch (e) {
+    thinking.remove();
+    add("sys", "Something went wrong: " + e.message);
+    // drop the unanswered turn so history stays valid
+    while (history.length && history[history.length - 1].role !== "user") history.pop();
+    history.pop();
+  }
+  history = history.slice(-60);
+  store.set("jarvis.history", history);
+  busy = false;
+}
+
+$("form").onsubmit = e => { e.preventDefault(); const t = $("box").value; $("box").value = ""; send(t); };
+
+// ---------- settings + memory dialogs ----------
+$("setBtn").onclick = () => {
+  const c = cfg();
+  $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base;
+  $("sName").value = c.name; $("sPersona").value = c.persona;
+  $("settings").showModal();
+};
+$("sCancel").onclick = () => $("settings").close();
+$("sSave").onclick = () => {
+  store.set("jarvis.cfg", { key: $("sKey").value.trim(), model: $("sModel").value.trim() || DEFAULTS.model,
+    base: $("sBase").value.trim() || DEFAULTS.base, name: $("sName").value.trim(),
+    persona: $("sPersona").value.trim() || DEFAULTS.persona });
+  $("settings").close();
+  add("sys", "Settings saved.");
+};
+$("memBtn").onclick = () => { $("mText").value = memories.join("\n"); $("memory").showModal(); };
+$("mCancel").onclick = () => $("memory").close();
+$("mSave").onclick = () => {
+  memories = $("mText").value.split("\n").map(s => s.trim()).filter(Boolean);
+  store.set("jarvis.memories", memories); $("memory").close();
+};
+
+paintSpeakBtn();
+renderHistory();
+</script>
+</body>
+</html>
