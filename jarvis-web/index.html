@@ -104,6 +104,102 @@
     .stage { min-height:150px; }
     #log { max-height:48%; }
   }
+
+  /* JARVIS visual upgrade: dimensional glass + holographic depth */
+  body {
+    background:
+      radial-gradient(ellipse at 50% 42%, rgba(11,55,75,.72) 0%, transparent 42%),
+      radial-gradient(ellipse at 12% 8%, rgba(14,76,105,.22), transparent 34%),
+      radial-gradient(ellipse at 88% 92%, rgba(18,80,105,.18), transparent 32%),
+      linear-gradient(145deg, #02070d 0%, #06131d 48%, #02070d 100%);
+    perspective: 1500px;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: linear-gradient(rgba(56,217,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,217,255,.035) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: radial-gradient(ellipse at center, black 12%, transparent 82%);
+    opacity: .55;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,.52) 100%);
+  }
+  #app { position: relative; z-index: 1; perspective: 1500px; }
+  .top, .panel, form input {
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    background: linear-gradient(145deg, rgba(13,37,51,.82), rgba(3,14,23,.76));
+    border: 1px solid rgba(77,221,255,.25);
+    box-shadow: 0 16px 42px rgba(0,0,0,.32), inset 0 1px 0 rgba(210,249,255,.08),
+      inset 0 -1px 0 rgba(56,217,255,.08), 0 0 24px rgba(23,166,211,.045);
+  }
+  .top { border-radius: 13px; transform: translateZ(18px); }
+  .panel {
+    border-radius: 13px; position: relative; overflow: hidden;
+    box-shadow: 0 18px 44px rgba(0,0,0,.36), inset 0 1px 0 rgba(210,249,255,.09),
+      inset 0 0 24px rgba(56,217,255,.025), 0 0 0 1px rgba(56,217,255,.025);
+    transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease;
+  }
+  .panel::before {
+    content: ""; position: absolute; left: 14px; right: 14px; top: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(120,235,255,.55), transparent);
+    pointer-events: none;
+  }
+  .panel:hover {
+    border-color: rgba(56,217,255,.42);
+    box-shadow: 0 22px 52px rgba(0,0,0,.42), inset 0 1px 0 rgba(210,249,255,.12),
+      0 0 26px rgba(56,217,255,.07);
+    transform: translateY(-2px);
+  }
+  .logo {
+    border-radius: 8px; filter: drop-shadow(0 0 9px var(--c));
+    transform: rotate(30deg); box-shadow: 0 0 22px var(--c), inset 0 0 8px rgba(255,255,255,.6);
+  }
+  .title { text-shadow: 0 0 18px rgba(56,217,255,.3); }
+  .actions button, form button, .panel .link {
+    border-radius: 7px; transition: all .2s ease;
+  }
+  .actions button:hover, .actions button.on {
+    background: rgba(56,217,255,.09); box-shadow: 0 0 18px rgba(56,217,255,.12), inset 0 0 12px rgba(56,217,255,.06);
+    transform: translateY(-1px);
+  }
+  .stage { isolation: isolate; }
+  .stage::before, .stage::after {
+    content: ""; position: absolute; left: 50%; top: 48%; pointer-events: none;
+    border: 1px solid rgba(56,217,255,.2); border-radius: 50%;
+    transform: translate(-50%,-50%) rotateX(68deg);
+    box-shadow: 0 0 22px rgba(56,217,255,.08), inset 0 0 18px rgba(56,217,255,.05);
+  }
+  .stage::before { width: min(62%, 440px); aspect-ratio: 1; }
+  .stage::after {
+    width: min(53%, 370px); aspect-ratio: 1; transform: translate(-50%,-50%) rotateX(68deg) rotateZ(38deg);
+    border-style: dashed; border-color: rgba(56,217,255,.13);
+    animation: jarvisOrbit 32s linear infinite;
+  }
+  #sphere { filter: drop-shadow(0 0 16px rgba(56,217,255,.17)); }
+  #orbLabel { text-shadow: 0 0 14px rgba(56,217,255,.22); }
+  .msg { border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  .me { background: linear-gradient(135deg, rgba(29,115,145,.28), rgba(9,40,57,.5)); }
+  .ai { background: linear-gradient(135deg, rgba(10,34,48,.88), rgba(4,17,27,.82)); }
+  form input { border-radius: 9px; box-shadow: inset 0 3px 12px rgba(0,0,0,.24), 0 8px 24px rgba(0,0,0,.18); }
+  form button { border-radius: 9px; box-shadow: 0 0 18px rgba(56,217,255,.09), inset 0 1px 0 rgba(255,255,255,.08); }
+  form button:hover { box-shadow: 0 0 24px rgba(56,217,255,.2), inset 0 0 14px rgba(56,217,255,.1); transform: translateY(-1px); }
+  dialog { border-radius: 14px; box-shadow: 0 28px 90px rgba(0,0,0,.65), 0 0 36px rgba(56,217,255,.09); }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: rgba(56,217,255,.22); border-radius: 8px; }
+  @keyframes jarvisOrbit { to { transform: translate(-50%,-50%) rotateX(68deg) rotateZ(398deg); } }
+  @media (max-width: 900px) {
+    .top, .panel { transform: none; }
+    .stage::before { width: min(76%, 360px); }
+    .stage::after { width: min(66%, 310px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stage::after { animation: none; }
+    .panel, .actions button, form button { transition: none; }
+  }
+
 </style>
 </head>
 <body data-state="idle">
