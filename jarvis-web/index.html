@@ -437,7 +437,16 @@ function renderTimers() {
   }
 }
 
-function tickClock() { $("clock").textContent = clock24(new Date()); renderTimers(); }
+const jarvisBootTime = Date.now();
+function tickClock() {
+  $("clock").textContent = clock24(new Date());
+  const elapsed = Math.floor((Date.now() - jarvisBootTime) / 1000);
+  const hh = String(Math.floor(elapsed / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((elapsed % 3600) / 60)).padStart(2, "0");
+  const ss = String(elapsed % 60).padStart(2, "0");
+  const uptime = $("hudUptime"); if (uptime) uptime.textContent = hh + ":" + mm + ":" + ss;
+  renderTimers();
+}
 setInterval(tickClock, 500);
 
 // ---------- the sphere: shows what Jarvis is doing ----------
@@ -456,6 +465,7 @@ function setState(s) {
   target = STATES[s] || STATES.idle;
   document.body.dataset.state = s;
   $("orbLabel").textContent = "Voice link · " + (ORB_LABELS[s] || "");
+  const mode = $("hudMode"); if (mode) mode.textContent = (s || "idle").toUpperCase();
 }
 
 const cv = $("sphere"), ctx = cv.getContext("2d");
