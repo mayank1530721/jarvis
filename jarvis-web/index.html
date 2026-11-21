@@ -787,10 +787,21 @@ async function callOnce(c, model, messages, onToken, stream) {
   } finally { clearTimeout(timer); }
 }
 
+// Keep the request window aligned to a complete conversation turn.
+// Gemini rejects a transcript that begins with an assistant function call (for example,
+// when slice(-30) cuts off the user message that originally caused that call).
+function recentHistory(limit = 30) {
+  let start = Math.max(0, history.length - limit);
+  while (start < history.length && history[start]?.role !== "user") start++;
+  return history.slice(start);
+}
+
 async function callModel(messages, status, onToken) {
   const c = cfg();
   const models = [c.model, ...String(c.fallbacks || "").split(",").map(s => s.trim()).filter(Boolean)]
     .filter((m, i, a) => m && a.indexOf(m) === i);
+  // Use a turn-aligned window rather than slicing blindly through a tool-call exchange.
+  messages = [{ role: "system", content: systemPrompt() }, ...recentHistory(30)];
   let lastErr, stream = true;
   for (let i = 0; i < models.length; i++) {
     for (let attempt = 0; attempt < 2; attempt++) {
