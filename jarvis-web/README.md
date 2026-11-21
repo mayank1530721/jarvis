@@ -3,7 +3,7 @@
 A personal AI assistant that runs in your browser. No install, no Python.
 
 ## What it does today
-- Chat, with the last conversations remembered.
+- Chat, with the last conversations remembered. A glowing orb shows when Jarvis is listening, thinking or speaking.
 - Talk to it with the Mic button; it talks back (use Chrome or Edge).
 - Long-term memory: say "remember that I ..." and it saves it. See and edit it under Memory.
 - Tools: tell the time, open websites, search Google, set timers.

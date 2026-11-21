@@ -13,6 +13,26 @@
   header h1 { font-size:18px; margin:0; letter-spacing:3px; color:var(--accent); flex:1; }
   header button { background:none; border:1px solid var(--line); color:var(--dim); padding:6px 10px; border-radius:8px; cursor:pointer; }
   header button.on { color:var(--accent); border-color:var(--accent); }
+  #orbwrap { display:flex; flex-direction:column; align-items:center; padding:14px 0 4px; }
+  #orb { --c:#3ad1ff; --spin:14s; --beat:3s; position:relative; width:116px; height:116px; }
+  #orb i { position:absolute; border-radius:50%; border:2px solid transparent; transition:border-color .4s; }
+  #orb i:nth-child(1) { inset:0; border-top-color:var(--c); border-bottom-color:var(--c); opacity:.9;
+                        animation:spin var(--spin) linear infinite; }
+  #orb i:nth-child(2) { inset:13px; border-left-color:var(--c); border-right-color:var(--c); opacity:.7;
+                        animation:spin calc(var(--spin) * .7) linear infinite reverse; }
+  #orb i:nth-child(3) { inset:27px; border:2px dashed var(--c); opacity:.5;
+                        animation:spin calc(var(--spin) * 1.6) linear infinite; }
+  #orb b { position:absolute; inset:41px; border-radius:50%;
+           background:radial-gradient(circle, #fff 0%, var(--c) 45%, transparent 75%);
+           box-shadow:0 0 26px var(--c); animation:breathe var(--beat) ease-in-out infinite; }
+  #orb.listening { --c:#5dff9d; --spin:6s;  --beat:.9s; }
+  #orb.thinking  { --c:#ffb84d; --spin:1.6s; --beat:1.2s; }
+  #orb.speaking  { --c:#3ad1ff; --spin:5s;  --beat:.5s; }
+  #orbLabel { color:var(--dim); font-size:12px; letter-spacing:3px; text-transform:uppercase; margin-top:10px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @keyframes breathe { 0%,100% { transform:scale(.88); opacity:.75; } 50% { transform:scale(1.12); opacity:1; } }
+  @media (prefers-reduced-motion: reduce) { #orb i, #orb b { animation:none; } }
+  @media (max-height:560px) { #orbwrap { display:none; } }
   #log { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
   .msg { max-width:min(720px, 90%); padding:10px 14px; border-radius:14px; white-space:pre-wrap; word-wrap:break-word; }
   .me { align-self:flex-end; background:var(--me); }
@@ -43,6 +63,11 @@
   <button id="memBtn">Memory</button>
   <button id="setBtn">Settings</button>
 </header>
+
+<div id="orbwrap">
+  <div id="orb" class="idle"><i></i><i></i><i></i><b></b></div>
+  <div id="orbLabel">Standing by</div>
+</div>
 
 <div id="log"></div>
 
@@ -123,12 +148,25 @@ function renderHistory() {
   if (!history.length) add("sys", "Jarvis online. Open Settings and paste your API key to begin.");
 }
 
+// ---------- the orb: shows what Jarvis is doing ----------
+const ORB_LABELS = { idle: "Standing by", listening: "Listening", thinking: "Thinking", speaking: "Speaking" };
+let speaking = false;
+function setState(s) {
+  $("orb").className = s;
+  $("orbLabel").textContent = ORB_LABELS[s] || "";
+}
+
 // ---------- speech out ----------
+let currentUtterance = null;
 function speak(text) {
   if (!speakOn || !("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
   const clean = text.replace(/[*_`#>]/g, "");
   const u = new SpeechSynthesisUtterance(clean);
+  currentUtterance = u;
+  u.onstart = () => { if (currentUtterance === u) { speaking = true; setState("speaking"); } };
+  const done = () => { if (currentUtterance === u) { speaking = false; setState(busy ? "thinking" : "idle"); } };
+  u.onend = done; u.onerror = done;
   speechSynthesis.speak(u);
 }
 function paintSpeakBtn() {
@@ -137,7 +175,7 @@ function paintSpeakBtn() {
 }
 $("speakBtn").onclick = () => {
   speakOn = !speakOn; store.set("jarvis.speak", speakOn); paintSpeakBtn();
-  if (!speakOn && "speechSynthesis" in window) speechSynthesis.cancel();
+  if (!speakOn && "speechSynthesis" in window) { currentUtterance = null; speechSynthesis.cancel(); speaking = false; setState(busy ? "thinking" : "idle"); }
 };
 
 // ---------- speech in ----------
@@ -149,8 +187,8 @@ $("micBtn").onclick = () => {
   rec = new SR();
   rec.lang = navigator.language || "en-IN";
   rec.interimResults = false;
-  rec.onstart = () => $("micBtn").classList.add("rec");
-  rec.onend = () => { $("micBtn").classList.remove("rec"); rec = null; };
+  rec.onstart = () => { $("micBtn").classList.add("rec"); setState("listening"); };
+  rec.onend = () => { $("micBtn").classList.remove("rec"); rec = null; if (!busy && !speaking) setState("idle"); };
   rec.onerror = e => add("sys", "Mic error: " + e.error);
   rec.onresult = e => {
     const t = e.results[0][0].transcript;
@@ -269,6 +307,7 @@ async function send(text) {
   if (!text || busy) return;
   if (!cfg().key) { add("sys", "Open Settings and paste your API key first."); return; }
   busy = true;
+  setState("thinking");
   add("me", text);
   history.push({ role: "user", content: text });
   const thinking = add("sys", "...");
@@ -303,6 +342,7 @@ async function send(text) {
   history = history.slice(-60);
   store.set("jarvis.history", history);
   busy = false;
+  if (!speaking && !(currentUtterance && speechSynthesis.pending)) setState("idle");
 }
 
 $("form").onsubmit = e => { e.preventDefault(); const t = $("box").value; $("box").value = ""; send(t); };
