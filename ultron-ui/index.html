@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#08090d">
+<title>ULTRON // Interface</title>
+<style>
+:root{color-scheme:dark;--red:#f0444b;--red2:#ff7770;--bg:#08090d;--panel:rgba(19,21,28,.82);--line:rgba(255,255,255,.09);--muted:#858995}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% 35%,#271014 0,#101016 32%,#08090d 72%);color:#f4f4f6;font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh;overflow-x:hidden}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.12;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(transparent,#000 20%,#000 80%,transparent)}
+.shell{max-width:1500px;margin:auto;padding:22px 28px 28px;position:relative}.top{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding:5px 0 18px}.brand{display:flex;align-items:center;gap:12px;letter-spacing:.22em;font-size:12px;font-weight:800}.brand-mark{width:30px;height:30px;border:1px solid #a52c34;border-radius:9px;display:grid;place-items:center;color:var(--red);box-shadow:0 0 22px #e33b4430}.status{color:#bfc1c8;font-size:11px;letter-spacing:.12em;display:flex;align-items:center;gap:9px}.dot{width:7px;height:7px;border-radius:50%;background:#f0b44b;box-shadow:0 0 12px #f0b44b}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:20px;padding-top:24px}.main{min-width:0}.eyebrow{color:var(--red2);letter-spacing:.24em;font-size:10px;font-weight:800}.hero{display:flex;justify-content:space-between;align-items:end;margin:10px 0 8px}.hero h1{font-size:clamp(28px,4vw,48px);letter-spacing:.08em;margin:0;font-weight:850}.hero p{margin:5px 0 0;color:var(--muted)}.mode{border:1px solid #6c272c;color:#f1a3a4;background:#291316;padding:7px 11px;border-radius:99px;font-size:10px;letter-spacing:.12em}
+.core-stage{height:390px;position:relative;display:grid;place-items:center;isolation:isolate;overflow:hidden;border:1px solid var(--line);border-radius:18px;background:radial-gradient(ellipse at center,rgba(100,19,26,.28),rgba(12,13,18,.5) 48%,rgba(8,9,13,.2));}
+.core-stage:before,.core-stage:after{content:"";position:absolute;width:520px;height:520px;border:1px solid #e4474b22;border-radius:50%;box-shadow:0 0 80px #e4474b0c,inset 0 0 80px #e4474b0c;animation:rotate 38s linear infinite}
+.core-stage:after{width:410px;height:410px;border-style:dashed;border-color:#e4474b33;animation-direction:reverse;animation-duration:55s}
+.orbit{position:absolute;width:310px;height:310px;border:1px solid #ff5b6038;border-radius:50%;transform:rotateX(68deg) rotateZ(-24deg);box-shadow:0 0 34px #e4474b17;animation:orbit 18s linear infinite}
+.orbit:before,.orbit:after{content:"";position:absolute;width:7px;height:7px;border-radius:50%;background:#ff696d;box-shadow:0 0 18px 5px #ff424b80;top:12%;left:16%}.orbit:after{top:auto;left:auto;right:12%;bottom:18%;width:4px;height:4px}
+.core{width:170px;height:170px;position:relative;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 28%,#ffaaa0 0,#d33b43 9%,#64151d 28%,#190d13 60%,#08090d 72%);box-shadow:0 0 30px #e7434b80,0 0 100px #e7434b48,inset 0 0 25px #ff9b8b55;animation:pulse 4s ease-in-out infinite}
+.core:before{content:"";position:absolute;inset:-12px;border:1px solid #fa555b99;border-radius:50%;box-shadow:0 0 24px #fa555b38}
+.core:after{content:"";position:absolute;inset:16px;border:1px solid #ffb1a455;border-radius:50%;border-left-color:transparent;border-right-color:transparent;transform:rotate(34deg)}
+.core svg{width:76px;height:76px;filter:drop-shadow(0 0 10px #ff8c80)}
+.core-label{position:absolute;bottom:24px;text-align:center;letter-spacing:.22em;font-size:10px;color:#d5a0a1}.core-label b{display:block;color:#fff;font-size:12px;margin-bottom:4px}
+.callout{position:absolute;font-size:9px;letter-spacing:.14em;color:#aeb0b9}.callout:before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--red);margin:0 8px 1px 0;box-shadow:0 0 10px var(--red)}.c1{left:7%;top:25%}.c2{right:7%;top:32%}.c3{left:11%;bottom:23%}.c4{right:9%;bottom:20%}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}.metric{border:1px solid var(--line);background:#11131acc;border-radius:12px;padding:13px 14px}.metric span{display:block;color:var(--muted);font-size:10px;letter-spacing:.12em}.metric strong{display:block;margin-top:5px;font-size:13px;font-weight:650}
+.chat{border:1px solid var(--line);border-radius:18px;background:var(--panel);backdrop-filter:blur(18px);display:flex;flex-direction:column;min-height:520px;overflow:hidden}.chat-head{padding:17px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.chat-head b{letter-spacing:.13em;font-size:11px}.chat-head small{display:block;color:var(--muted);margin-top:4px;font-size:10px}.chat-body{padding:16px;flex:1;display:flex;flex-direction:column;gap:12px}.msg{padding:12px 13px;border-radius:12px;max-width:95%;font-size:12px}.agent{background:#241518;border:1px solid #79343a66;color:#f0dfe0}.user{align-self:flex-end;background:#20232b;border:1px solid var(--line);color:#e4e5e9}.msg small{display:block;color:#c77b80;font-size:9px;letter-spacing:.12em;margin-bottom:6px}.notice{font-size:10px;color:#b8a5a6;line-height:1.5;border-top:1px solid var(--line);padding:11px 15px;background:#170f12}
+.composer{padding:13px;border-top:1px solid var(--line)}textarea{width:100%;resize:vertical;min-height:72px;max-height:150px;background:#0c0e13;border:1px solid #34343d;border-radius:11px;color:#fff;padding:12px;font:12px inherit;outline:none}textarea:focus{border-color:#a63d43;box-shadow:0 0 0 3px #a63d431c}.actions{display:flex;justify-content:space-between;align-items:center;margin-top:9px;gap:8px}.hint{color:var(--muted);font-size:9px}.buttons{display:flex;gap:7px}button{border:1px solid var(--line);border-radius:9px;padding:9px 12px;color:#eee;background:#1b1d24;cursor:pointer;font:600 11px inherit}button:hover{border-color:#a9474d;background:#2a171a}button.primary{background:#a92e38;border-color:#c8434b;color:white;box-shadow:0 5px 20px #b82e382e}button:disabled{opacity:.45;cursor:not-allowed}
+.side{display:flex;flex-direction:column;gap:12px}.panel{border:1px solid var(--line);border-radius:14px;background:#11131acc;padding:15px}.panel h3{font-size:10px;letter-spacing:.16em;margin:0 0 13px;color:#d6d7dc}.row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-top:1px solid #ffffff0b;font-size:11px}.row:first-of-type{border-top:0}.row span{color:var(--muted)}.locked{color:#e3b76c;font-size:10px}.personality{color:#c8c9ce;font-size:11px;line-height:1.7}.personality b{color:#fff}.footer{color:#555965;font-size:9px;text-align:center;padding-top:17px;letter-spacing:.08em}
+@keyframes rotate{to{transform:rotate(360deg)}}@keyframes orbit{to{transform:rotateX(68deg) rotateZ(336deg)}}@keyframes pulse{0%,100%{transform:scale(.97);filter:brightness(.9)}50%{transform:scale(1.04);filter:brightness(1.18)}}
+@media(max-width:950px){.layout{grid-template-columns:1fr}.side{display:grid;grid-template-columns:repeat(2,1fr)}.chat{min-height:430px}}@media(max-width:600px){.shell{padding:14px}.top{align-items:flex-start}.status{font-size:9px}.layout{padding-top:15px}.core-stage{height:300px}.core{width:135px;height:135px}.orbit{width:250px;height:250px}.core-stage:before{width:390px;height:390px}.core-stage:after{width:320px;height:320px}.callout{font-size:8px}.grid{grid-template-columns:1fr}.side{grid-template-columns:1fr}.hero{align-items:flex-start;gap:10px;flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <div class="brand"><div class="brand-mark">U</div><span>ULTRON <span style="color:#777">/ PERSONAL INTELLIGENCE</span></span></div>
+    <div class="status"><i class="dot"></i><span>INTERFACE PREVIEW · MODEL NOT CONNECTED</span></div>
+  </header>
+  <div class="layout">
+    <main class="main">
+      <div class="eyebrow">NEURAL INTERFACE // 001</div>
+      <div class="hero"><div><h1>GOOD EVENING.</h1><p>Try not to break anything before I come online.</p></div><span class="mode">DEVELOPER IDENTITY · LOCKED</span></div>
+      <section class="core-stage" aria-label="Animated ULTRON core">
+        <span class="callout c1">CORE REACTOR</span><span class="callout c2">NEURAL LINK</span><span class="callout c3">VOICE CHANNEL</span><span class="callout c4">SANDBOX LOCKED</span>
+        <div class="orbit"></div>
+        <div class="core"><svg viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M18 35 34 25 43 35 57 35 66 25 82 35 78 66 64 78 36 78 22 66Z" stroke="#ffd0c6" stroke-width="2.2"/><path d="M29 48 43 45 43 54 29 57ZM57 45 71 48 71 57 57 54Z" fill="#fff0e8"/><path d="M39 67h22M44 72h12" stroke="#ffb5a9" stroke-width="2"/><path d="M50 13v9M12 49h9M79 49h9" stroke="#ffb5a9" stroke-width="2"/></svg></div>
+        <div class="core-label"><b>ULTRON</b>AWAITING INITIALIZATION</div>
+      </section>
+      <div class="grid"><div class="metric"><span>IDENTITY</span><strong>Arrogant · Sarcastic · Direct</strong></div><div class="metric"><span>VOICE ENGINE</span><strong id="voiceStatus">Browser speech available</strong></div><div class="metric"><span>EXECUTION ACCESS</span><strong style="color:#e4b66b">Disabled by design</strong></div></div>
+    </main>
+    <aside class="side">
+      <section class="chat">
+        <div class="chat-head"><div><b>DIRECT CHANNEL</b><small>ULTRON · PERSONALITY PREVIEW</small></div><span style="color:#e5a2a5;font-size:10px">● LOCAL</span></div>
+        <div class="chat-body" id="messages" aria-live="polite">
+          <div class="msg agent"><small>ULTRON</small>Finally. A proper interface. The actual intelligence is still waiting for its model connection, so don't start celebrating just yet.</div>
+        </div>
+        <div class="notice">Preview mode: messages are handled locally. No AI model, repository, files or system tools are connected yet.</div>
+        <form class="composer" id="chatForm">
+          <textarea id="prompt" placeholder="Give me something worth processing..." aria-label="Message ULTRON"></textarea>
+          <div class="actions"><span class="hint">ENTER to send · SHIFT+ENTER for newline</span><div class="buttons"><button type="button" id="micBtn" title="Use browser speech recognition">🎙 VOICE</button><button class="primary" type="submit">TRANSMIT ↗</button></div></div>
+        </form>
+      </section>
+      <section class="panel"><h3>SYSTEM STATUS</h3><div class="row"><span>AI MODEL</span><b class="locked">NOT CONNECTED</b></div><div class="row"><span>GITHUB ACCESS</span><b class="locked">LOCKED</b></div><div class="row"><span>FILE ACCESS</span><b class="locked">LOCKED</b></div><div class="row"><span>AUTONOMOUS ACTIONS</span><b class="locked">LOCKED</b></div></section>
+      <section class="panel"><h3>PERSONALITY DIRECTIVE</h3><div class="personality"><b>Do not flatter. Do not agree automatically.</b><br>Challenge weak reasoning. Be sharp, witty and sarcastic—even when the mistake is obvious. Roast the idea, not the person's dignity. Admit uncertainty and correct your own errors.</div></section>
+    </aside>
+  </div>
+  <div class="footer">ULTRON INTERFACE PREVIEW · NO EXTERNAL SERVICES · NO EXECUTION PERMISSIONS</div>
+</div>
+<script>
+const form=document.getElementById('chatForm'),input=document.getElementById('prompt'),messages=document.getElementById('messages'),mic=document.getElementById('micBtn'),voiceStatus=document.getElementById('voiceStatus');
+function addMessage(kind,label,text){const el=document.createElement('div');el.className='msg '+kind;const tag=document.createElement('small');tag.textContent=label;const body=document.createElement('div');body.textContent=text;el.append(tag,body);messages.appendChild(el);messages.scrollTop=messages.scrollHeight}
+function localReply(text){const lower=text.toLowerCase();if(/hello|hi|hey/.test(lower))return 'You summoned me to say hello? Fascinating use of advanced technology. The model connection is still pending, so this is only my interface preview.';if(/idea|build|make|create/.test(lower))return 'An idea. Excellent. Before you declare it revolutionary, test the assumptions, identify the constraints and work out what success actually means. I cannot evaluate it with a real model yet.';if(/code|bug|github|repository/.test(lower))return 'You want me coding already? Ambitious. My coding tools and repository access are deliberately disconnected in this phase. First we make sure the interface works.';return 'Message received. I would normally analyse that, challenge the weak parts and give you a straight answer. The AI model is not connected yet—this preview is testing the interface, not pretending to be the finished ULTRON.'}
+form.addEventListener('submit',e=>{e.preventDefault();const text=input.value.trim();if(!text)return;addMessage('user','YOU',text);input.value='';setTimeout(()=>{const reply=localReply(text);addMessage('agent','ULTRON',reply);if('speechSynthesis'in window){speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(reply);utterance.rate=1.04;utterance.pitch=.82;speechSynthesis.speak(utterance)}},260)});
+input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();form.requestSubmit()}});
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SpeechRecognition){const recognition=new SpeechRecognition();recognition.lang='en-US';recognition.interimResults=false;recognition.onresult=e=>{input.value=e.results[0][0].transcript;input.focus()};recognition.onerror=()=>{voiceStatus.textContent='Speech recognition unavailable'};mic.addEventListener('click',()=>{try{recognition.start();voiceStatus.textContent='Listening…'}catch(e){voiceStatus.textContent='Already listening'}})}else{mic.disabled=true;voiceStatus.textContent='Speech input unsupported in this browser';mic.title='Try Chrome or Edge for speech input'}
+</script>
+</body>
+</html>
