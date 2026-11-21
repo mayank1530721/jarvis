@@ -200,6 +200,54 @@
     .panel, .actions button, form button { transition: none; }
   }
 
+
+  /* Cinematic holographic command core */
+  .stage {
+    overflow:hidden; border:1px solid rgba(56,217,255,.13); border-radius:18px;
+    background:
+      radial-gradient(ellipse at 50% 48%, rgba(12,95,128,.13), transparent 42%),
+      linear-gradient(180deg, rgba(4,18,29,.2), rgba(2,9,16,.08));
+    box-shadow: inset 0 0 70px rgba(21,153,196,.055), 0 18px 60px rgba(0,0,0,.18);
+    transform-style:preserve-3d;
+  }
+  .stage::before { width:min(68%, 500px); border-color:rgba(56,217,255,.26); box-shadow:0 0 35px rgba(56,217,255,.13), inset 0 0 28px rgba(56,217,255,.08); }
+  .stage::after { width:min(59%, 430px); border-color:rgba(105,231,255,.22); border-style:dotted; }
+  #sphere { z-index:2; }
+  .hud-orbit { position:absolute; left:50%; top:48%; border:1px solid rgba(71,220,255,.2); border-radius:50%; pointer-events:none; transform-style:preserve-3d; z-index:1; }
+  .orbit-a { width:min(48%,360px); aspect-ratio:1; transform:translate(-50%,-50%) rotateX(74deg) rotateY(18deg); border-top-color:rgba(132,244,255,.8); border-bottom-color:rgba(56,217,255,.05); animation:coreOrbitA 13s linear infinite; }
+  .orbit-b { width:min(56%,420px); aspect-ratio:1; transform:translate(-50%,-50%) rotateX(67deg) rotateY(-28deg); border-left:2px solid rgba(56,217,255,.48); border-right:1px dashed rgba(56,217,255,.16); animation:coreOrbitB 19s linear infinite; }
+  .orbit-c { width:min(39%,290px); aspect-ratio:1; transform:translate(-50%,-50%) rotateX(78deg) rotateZ(45deg); border:1px dashed rgba(150,244,255,.25); animation:coreOrbitC 28s linear infinite; }
+  .hud-scan { position:absolute; z-index:3; pointer-events:none; left:8%; right:8%; top:10%; height:1px; background:linear-gradient(90deg,transparent,rgba(111,239,255,.58),transparent); box-shadow:0 0 12px rgba(56,217,255,.45); animation:hudScan 8s ease-in-out infinite; opacity:.55; }
+  .core-reticle { position:absolute; z-index:1; left:50%; top:48%; width:min(29%,210px); aspect-ratio:1; transform:translate(-50%,-50%); border:1px solid rgba(103,232,255,.18); border-radius:50%; box-shadow:0 0 35px rgba(56,217,255,.08); }
+  .core-reticle span { position:absolute; width:13px; height:13px; border-color:rgba(128,239,255,.85); border-style:solid; }
+  .core-reticle span:nth-child(1) { left:-2px;top:-2px;border-width:1px 0 0 1px; }
+  .core-reticle span:nth-child(2) { right:-2px;top:-2px;border-width:1px 1px 0 0; }
+  .core-reticle span:nth-child(3) { left:-2px;bottom:-2px;border-width:0 0 1px 1px; }
+  .core-reticle span:nth-child(4) { right:-2px;bottom:-2px;border-width:0 1px 1px 0; }
+  .hud-corner { position:absolute; z-index:4; display:flex; flex-direction:column; gap:3px; min-width:92px; font:9px var(--mono); letter-spacing:1.5px; color:rgba(112,193,211,.68); text-shadow:0 0 10px rgba(56,217,255,.18); }
+  .hud-corner b { color:#b9f5ff; font-size:10px; font-weight:500; letter-spacing:2px; }
+  .hud-corner i { display:block; width:34px; height:2px; background:linear-gradient(90deg,var(--c),transparent); box-shadow:0 0 8px var(--c); }
+  .hud-corner.tl { left:22px;top:20px; } .hud-corner.tr { right:22px;top:20px;text-align:right;align-items:flex-end; }
+  .hud-corner.bl { left:22px;bottom:48px; } .hud-corner.br { right:22px;bottom:48px;text-align:right;align-items:flex-end; }
+  .hud-readout { position:absolute; z-index:4; left:22px; right:22px; top:50%; display:flex; justify-content:space-between; transform:translateY(-50%); pointer-events:none; color:rgba(91,190,213,.42); font:8px var(--mono); letter-spacing:2px; }
+  #orbLabel { z-index:5; bottom:12px; }
+  @keyframes coreOrbitA { to { transform:translate(-50%,-50%) rotateX(74deg) rotateY(378deg); } }
+  @keyframes coreOrbitB { to { transform:translate(-50%,-50%) rotateX(427deg) rotateY(-28deg); } }
+  @keyframes coreOrbitC { to { transform:translate(-50%,-50%) rotateX(78deg) rotateZ(405deg); } }
+  @keyframes hudScan { 0%,100% { top:12%;opacity:0; } 12%,85% { opacity:.65; } 50% { top:83%; } }
+  body[data-state="listening"] .hud-orbit, body[data-state="listening"] .core-reticle { border-color:rgba(93,255,176,.38); }
+  body[data-state="thinking"] .hud-orbit, body[data-state="thinking"] .core-reticle { border-color:rgba(255,184,77,.4); }
+  @media (max-width:900px) {
+    .hud-corner { font-size:7px; min-width:70px; letter-spacing:1px; }
+    .hud-corner b { font-size:8px; }
+    .hud-corner.tl { left:10px;top:10px; } .hud-corner.tr { right:10px;top:10px; }
+    .hud-corner.bl { left:10px;bottom:42px; } .hud-corner.br { right:10px;bottom:42px; }
+    .hud-readout { display:none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .orbit-a,.orbit-b,.orbit-c,.hud-scan { animation:none; }
+  }
+
 </style>
 </head>
 <body data-state="idle">
@@ -220,7 +268,18 @@
   </aside>
 
   <main class="center">
-    <div class="stage"><canvas id="sphere"></canvas><div id="orbLabel">Standing by</div></div>
+    <div class="stage">
+      <div class="hud-orbit orbit-a"></div><div class="hud-orbit orbit-b"></div><div class="hud-orbit orbit-c"></div>
+      <div class="hud-scan"></div>
+      <div class="hud-corner tl"><span>NEURAL LINK</span><b>ACTIVE</b><i></i></div>
+      <div class="hud-corner tr"><span>CORE TEMP</span><b>OPTIMAL</b><i></i></div>
+      <div class="hud-corner bl"><span>PROCESSING</span><b id="hudMode">STANDBY</b><i></i></div>
+      <div class="hud-corner br"><span>UPTIME</span><b id="hudUptime">00:00:00</b><i></i></div>
+      <div class="core-reticle"><span></span><span></span><span></span><span></span></div>
+      <canvas id="sphere"></canvas>
+      <div class="hud-readout"><span>J.A.R.V.I.S / CORE 01</span><span>HOLOGRAPHIC INTERFACE</span></div>
+      <div id="orbLabel">Standing by</div>
+    </div>
     <div id="log"></div>
   </main>
 
