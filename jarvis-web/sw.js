@@ -1,6 +1,6 @@
 // Keeps the Jarvis page available offline.
 // Online: always fetch the newest page and refresh the saved copy. Offline: use the saved copy.
-const CACHE = "jarvis-page-v6";
+const CACHE = "jarvis-page-v7";
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(["./", "./index.html"])).then(() => self.skipWaiting()));
