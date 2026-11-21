@@ -640,8 +640,10 @@ $("micBtn").onclick = () => {
 
 // ---------- tools Jarvis can use ----------
 const tools = [
+  // Gemini's OpenAI-compatible endpoint rejects an empty-object parameter schema.
+  // A function with no arguments should omit "parameters" entirely.
   { type: "function", function: { name: "get_time",
-      description: "Get the current local date and time.", parameters: { type: "object", properties: {} } } },
+      description: "Get the current local date and time." } },
   { type: "function", function: { name: "open_website",
       description: "Open a website in a new browser tab.",
       parameters: { type: "object", properties: { url: { type: "string", description: "Full URL, e.g. https://youtube.com" } }, required: ["url"] } } },
@@ -769,7 +771,7 @@ async function callOnce(c, model, messages, onToken, stream) {
       }
     } catch {}
     // Keep provider diagnostics visible; some compatible APIs return a nonstandard error body.
-    detail = String(detail || "The provider returned no error details").replace(/\\s+/g, " ").slice(0, 700);
+    detail = String(detail || "The provider returned no error details").replace(/\s+/g, " ").slice(0, 700);
     const e = new Error("API error " + res.status + ": " + detail);
     if (res.status === 429 || res.status >= 500) e.retry = e.next = true;   // busy or rate limited
     else if (res.status === 404) e.next = true;                             // model name not available
