@@ -152,6 +152,7 @@
   <label>Backup models (tried in order if the main one is busy; separate with commas)</label>
   <input type="text" id="sFallbacks">
   <small>Default is Google Gemini. Change the model, base URL and backups to switch provider later.</small>
+  <div style="margin-top:8px"><button id="sLocal" type="button" style="padding:6px 10px;border:1px solid var(--line);background:var(--bg);color:var(--c);cursor:pointer">Use local model (Ollama, works offline)</button></div>
   <label>Your name</label>
   <input type="text" id="sName">
   <label>Jarvis personality</label>
@@ -581,6 +582,14 @@ $("setBtn").onclick = () => {
   $("settings").showModal();
 };
 $("sCancel").onclick = () => $("settings").close();
+$("sLocal").onclick = () => {
+  $("sBase").value = "http://localhost:11434/v1";
+  $("sFallbacks").value = "";
+  if (!$("sKey").value.trim()) $("sKey").value = "ollama";   // local servers ignore the key; Jarvis just needs something here
+  if (!$("sModel").value.trim() || $("sModel").value.startsWith("gemini")) $("sModel").value = "";
+  $("sModel").placeholder = "type the model name you pulled in Ollama";
+  $("sModel").focus();
+};
 $("sSave").onclick = () => {
   store.set("jarvis.cfg", { key: $("sKey").value.trim(), model: $("sModel").value.trim() || DEFAULTS.model,
     base: $("sBase").value.trim() || DEFAULTS.base, fallbacks: $("sFallbacks").value.trim(),
@@ -599,6 +608,8 @@ $("mSave").onclick = () => {
   store.set("jarvis.memories", memories); $("memory").close();
   renderMemList(); renderVitals();
 };
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
 setState("idle");
 paintSpeakBtn();
