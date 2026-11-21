@@ -9,7 +9,7 @@ A personal AI assistant that runs in your browser. No install, no Python.
 - Tools: tell the time, open websites, search Google, set timers.
 
 ## Use it
-1. Get a free key at console.groq.com/keys.
+1. Get a free Gemini key at aistudio.google.com (or use any OpenAI-compatible provider).
 2. Open the page, click Settings, paste the key, Save.
 3. Everything (key, memory, chat) is stored only in your own browser.
 

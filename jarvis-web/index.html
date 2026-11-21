@@ -60,7 +60,7 @@
   <input type="text" id="sModel">
   <label>API base URL (any OpenAI-compatible service)</label>
   <input type="text" id="sBase">
-  <small>Default is Groq (free). Change these three fields to switch provider later.</small>
+  <small>Default is Google Gemini. Change these three fields to switch provider later.</small>
   <label>Your name</label>
   <input type="text" id="sName">
   <label>Jarvis personality</label>
@@ -87,8 +87,8 @@ const store = {
 
 const DEFAULTS = {
   key: "",
-  model: "llama-3.3-70b-versatile",
-  base: "https://api.groq.com/openai/v1",
+  model: "gemini-3.8-flash",
+  base: "https://generativelanguage.googleapis.com/v1beta/openai",
   name: "",
   persona: "You are Jarvis, a loyal, quick-witted personal AI assistant. Be concise, warm and a little dry-humoured. " +
            "Prefer short answers, especially since replies may be spoken aloud."
