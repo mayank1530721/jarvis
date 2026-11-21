@@ -248,6 +248,62 @@
     .orbit-a,.orbit-b,.orbit-c,.hud-scan { animation:none; }
   }
 
+
+  /* Interface pass 2 — cinematic depth, responsive glass and live-system detailing */
+  :root { --glass-edge:rgba(109,229,255,.3); --glass-hi:rgba(174,244,255,.12); }
+  body { background-attachment:fixed; }
+  #app { gap:16px; padding:18px; }
+  .top { min-height:58px; border-color:var(--glass-edge); box-shadow:0 12px 45px rgba(0,0,0,.4), inset 0 1px 0 var(--glass-hi), 0 0 30px rgba(56,217,255,.055); }
+  .system-chip { display:flex; align-items:center; gap:8px; padding:6px 10px; border:1px solid rgba(93,255,176,.2); border-radius:999px; color:rgba(153,255,210,.82); font:9px var(--mono); letter-spacing:1.6px; white-space:nowrap; background:rgba(20,110,77,.08); }
+  .system-chip::before { content:""; width:6px; height:6px; border-radius:50%; background:#5dffb0; box-shadow:0 0 10px #5dffb0; animation:statusPulse 2s ease-in-out infinite; }
+  .col { perspective:1100px; }
+  .panel { transform:translateZ(0); border-color:rgba(75,215,255,.2); background:linear-gradient(145deg,rgba(12,35,49,.82),rgba(3,13,22,.84)); }
+  .panel::after { content:""; position:absolute; inset:0; pointer-events:none; opacity:0; background:linear-gradient(115deg,transparent 25%,rgba(125,236,255,.055) 48%,transparent 68%); transform:translateX(-100%); transition:opacity .3s; }
+  .panel:hover::after { opacity:1; animation:glassSweep 1.1s ease; }
+  .panel:hover { transform:translateY(-3px) rotateX(.6deg); border-color:rgba(91,226,255,.48); }
+  .ph { color:#83b7c7; letter-spacing:2.8px; }
+  .ph::before { content:""; width:5px; height:5px; margin-right:9px; border-radius:50%; background:var(--c); box-shadow:0 0 9px var(--c); }
+  .row2, .li { transition:background .2s ease,padding .2s ease,border-color .2s ease; }
+  .row2:hover, .li:hover { padding-left:7px; padding-right:5px; background:rgba(56,217,255,.045); border-color:rgba(56,217,255,.18); }
+  .stage { border-color:rgba(81,222,255,.23); box-shadow:inset 0 0 90px rgba(21,153,196,.075),inset 0 0 2px rgba(154,245,255,.25),0 24px 70px rgba(0,0,0,.3),0 0 42px rgba(56,217,255,.045); }
+  .stage::after { filter:drop-shadow(0 0 7px rgba(56,217,255,.22)); }
+  .stage::before { border-width:1px; }
+  .stage .hud-orbit { filter:drop-shadow(0 0 5px rgba(56,217,255,.22)); }
+  .core-reticle { animation:reticleBreathe 5s ease-in-out infinite; }
+  #orbLabel { letter-spacing:4px; font-size:10px; color:#a4dce9; }
+  #orbLabel::before { animation:statusPulse 2.2s ease-in-out infinite; }
+  #log { scrollbar-gutter:stable; }
+  .msg { backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
+  .me { border-color:rgba(56,217,255,.3); box-shadow:0 8px 26px rgba(0,0,0,.2),inset 0 1px 0 rgba(178,246,255,.08); }
+  .ai { border-color:rgba(56,217,255,.2); box-shadow:0 8px 26px rgba(0,0,0,.22),inset 0 1px 0 rgba(178,246,255,.06); }
+  form { filter:drop-shadow(0 14px 24px rgba(0,0,0,.25)); }
+  form input { border-color:rgba(76,216,255,.28); background:linear-gradient(135deg,rgba(11,35,49,.92),rgba(3,14,23,.94)); }
+  form input::placeholder { color:#668b98; }
+  form button { min-width:82px; }
+  .actions button { border-color:rgba(82,213,250,.2); }
+  .actions button:focus-visible, form button:focus-visible, form input:focus-visible { outline:2px solid var(--c); outline-offset:3px; }
+  @keyframes statusPulse { 0%,100% { opacity:.55; transform:scale(.88); } 50% { opacity:1; transform:scale(1.15); } }
+  @keyframes reticleBreathe { 0%,100% { opacity:.62; scale:.97; } 50% { opacity:1; scale:1.035; } }
+  @keyframes glassSweep { to { transform:translateX(100%); } }
+  @media (max-width:1100px) { #app { grid-template-columns:220px minmax(0,1fr) 220px; gap:11px; padding:12px; } }
+  @media (max-width:900px) {
+    #app { padding:10px; }
+    .system-chip { display:none; }
+    .panel:hover { transform:none; }
+  }
+  @media (max-width:560px) {
+    #clock { display:none; }
+    .actions button { font-size:9px; padding:7px 3px; }
+    form { gap:5px; }
+    form button { min-width:54px; padding:0 9px; letter-spacing:1px; }
+    .stage { border-radius:13px; }
+    .hud-corner { opacity:.78; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    .system-chip::before,.core-reticle,#orbLabel::before { animation:none; }
+    .panel::after { display:none; }
+  }
+
 </style>
 </head>
 <body data-state="idle">
@@ -255,6 +311,7 @@
   <header class="top">
     <div class="brand"><div class="logo"></div><div><div class="title">JARVIS</div><div class="sub">Personal AI &middot; Live</div></div></div>
     <div id="clock">--:--:--</div>
+    <div class="system-chip">SYSTEM ONLINE</div>
     <div class="actions">
       <button id="speakBtn" title="Speak replies aloud">Voice: off</button>
       <button id="memBtn">Memory</button>
