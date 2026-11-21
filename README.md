@@ -1,5 +1,7 @@
 # Jarvis for ClipCore
 
+> **The main app is now `jarvis-web/`**: a browser-based JARVIS with specialist agents (see `jarvis-web/README.md`). This page describes the older Telegram bot that writes YouTube titles for campaigns. `desktop-agent/` is an early, read-only helper for controlling your PC later.
+
 A Telegram bot that writes YouTube titles and descriptions that follow a campaign's rules, and waits for your approval. Everything it uses has a free tier, so it costs nothing to run at this size.
 
 ## What it does today
@@ -27,7 +29,7 @@ Free tiers have daily and per-minute limits and can change. If the bot says it h
 2. In Telegram, message **@userinfobot**, copy your numeric ID.
 3. Get a Gemini key from Google AI Studio.
 4. Optional, for voice notes: get a Groq key.
-5. Copy `.env.example` to `.env` and fill in the values.
+5. Copy `.env.example` to `.env` and fill in the values. The bot reads this file automatically.
 
 ## Run it free on your own computer
 ```

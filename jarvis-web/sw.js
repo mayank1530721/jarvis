@@ -1,9 +1,13 @@
 // Keeps the Jarvis page available offline.
-// Online: always fetch the newest page and refresh the saved copy. Offline: use the saved copy.
-const CACHE = "jarvis-page-v11";
+// Online: always fetch the newest file and refresh the saved copy. Offline: use the saved copy.
+const CACHE = "jarvis-page-v12";
+const SHELL = [
+  "./", "./index.html", "./css/theme.css", "./css/app.css",
+  "./js/util.js", "./js/agents.js", "./js/intent.js", "./js/voice.js", "./js/model.js", "./js/cores.js", "./js/app.js"
+];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(["./", "./index.html"])).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", e => {
@@ -20,8 +24,7 @@ self.addEventListener("fetch", e => {
   e.respondWith(
     fetch(req)
       .then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(req, copy));
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }   // never save an error page
         return res;
       })
       .catch(() => caches.match(req).then(hit => hit || caches.match("./index.html")))

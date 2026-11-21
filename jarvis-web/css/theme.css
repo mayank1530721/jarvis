@@ -1,0 +1,43 @@
+/* Colour tokens, one block per agent. Everything in app.css reads these, so a new agent's whole
+   look is just a new block here (plus its entry in js/agents.js).
+
+   --base-rgb   the agent's identity colour (panel edges, glass tint, grid)
+   --c-rgb      the live accent: normally the identity colour, shifts with state (listening/thinking)
+   --hi-rgb     lighter highlight for hairlines and glints
+   --panel-rgb / --deep-rgb   the two dark tones the glass panels fade between
+   --glow-rgb / --glow2-rgb   background lighting
+*/
+body {
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Roboto Mono", monospace;
+  --ok: #5dffb0; --warn: #ffb84d;
+  --c-rgb: var(--base-rgb);
+  --c: rgb(var(--c-rgb));
+  --line: rgba(var(--base-rgb), .22);
+}
+
+body[data-agent="jarvis"] {
+  --base-rgb: 56, 217, 255; --hi-rgb: 132, 244, 255;
+  --panel-rgb: 13, 37, 51; --deep-rgb: 3, 14, 23;
+  --glow-rgb: 11, 55, 75; --glow2-rgb: 16, 78, 105;
+  --bg-0: #02070d; --bg-1: #06131d;
+  --text: #d5eef6; --dim: #6a8f9c; --ink: #02131b;
+  --logo-shape: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%);
+}
+body[data-agent="jarvis"][data-state="listening"] { --c-rgb: 93, 255, 176; }
+body[data-agent="jarvis"][data-state="thinking"]  { --c-rgb: 255, 184, 77; }
+
+body[data-agent="ultron"] {
+  --base-rgb: 255, 58, 74; --hi-rgb: 255, 160, 150;
+  --panel-rgb: 40, 11, 15; --deep-rgb: 14, 3, 5;
+  --glow-rgb: 92, 12, 22; --glow2-rgb: 104, 16, 26;
+  --bg-0: #080204; --bg-1: #14060a;
+  --text: #f4dede; --dim: #9b7378; --ink: #1a0306;
+  --logo-shape: polygon(50% 0, 100% 34%, 82% 100%, 18% 100%, 0 34%);
+}
+body[data-agent="ultron"][data-state="listening"] { --c-rgb: 255, 128, 64; }
+body[data-agent="ultron"][data-state="thinking"]  { --c-rgb: 255, 196, 72; }
+
+/* Reserved for the agents that are planned but not built yet. */
+body[data-agent="friday"]    { --base-rgb: 176, 110, 255; --hi-rgb: 214, 180, 255; --panel-rgb: 28, 14, 48; --deep-rgb: 8, 4, 18; --glow-rgb: 54, 22, 98; --glow2-rgb: 60, 26, 108; --bg-0: #05020b; --bg-1: #0d0719; --text: #ebe2f7; --dim: #8b7aa3; --ink: #12061f; --logo-shape: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+body[data-agent="daredevil"] { --base-rgb: 205, 40, 60;  --hi-rgb: 235, 130, 130; --panel-rgb: 30, 14, 16; --deep-rgb: 10, 6, 7;  --glow-rgb: 70, 10, 18; --glow2-rgb: 80, 14, 22;  --bg-0: #070405; --bg-1: #120a0b; --text: #eddede; --dim: #957a7c; --ink: #190507; --logo-shape: polygon(50% 0, 100% 100%, 0 100%); }
+body[data-agent="vision"]    { --base-rgb: 255, 196, 60; --hi-rgb: 255, 226, 150; --panel-rgb: 40, 30, 8;  --deep-rgb: 14, 10, 3;  --glow-rgb: 92, 66, 10; --glow2-rgb: 104, 74, 14; --bg-0: #080602; --bg-1: #151004; --text: #f6ecd6; --dim: #a39066; --ink: #1c1303; --logo-shape: circle(50%); }

@@ -1,4 +1,10 @@
 """Telegram bot: paste campaign rules, describe a clip (text or voice note), approve the draft."""
+from dotenv import load_dotenv
+
+# Read the .env file when running on your own computer. Hosts that set the variables directly are unaffected.
+# This must run before the local modules below are imported, because they read settings when imported.
+load_dotenv()
+
 import asyncio
 import logging
 import os
