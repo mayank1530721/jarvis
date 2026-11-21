@@ -13,7 +13,7 @@ A personal AI assistant that runs in your browser. No install, no Python.
 2. Open the page, click Settings, paste the key, Save.
 3. Everything (key, memory, chat) is stored only in your own browser.
 
-To switch AI provider later, change the model and API base URL in Settings. Any OpenAI-compatible service works.
+To switch AI provider later, change the model, API base URL and backup models in Settings. Any OpenAI-compatible service works. If the main model is busy (503), Jarvis retries, then tries the backup models in order.
 
 ## Host it free (GitHub Pages)
 Repo Settings > Pages > Deploy from a branch > `main` and folder `/ (root)`. Then open

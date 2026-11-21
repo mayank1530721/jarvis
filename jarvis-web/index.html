@@ -60,7 +60,9 @@
   <input type="text" id="sModel">
   <label>API base URL (any OpenAI-compatible service)</label>
   <input type="text" id="sBase">
-  <small>Default is Google Gemini. Change these three fields to switch provider later.</small>
+  <label>Backup models (tried in order if the main one is busy; separate with commas)</label>
+  <input type="text" id="sFallbacks">
+  <small>Default is Google Gemini. Change the model, base URL and backups to switch provider later.</small>
   <label>Your name</label>
   <input type="text" id="sName">
   <label>Jarvis personality</label>
@@ -89,6 +91,7 @@ const DEFAULTS = {
   key: "",
   model: "gemini-3.8-flash",
   base: "https://generativelanguage.googleapis.com/v1beta/openai",
+  fallbacks: "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.6-flash",
   name: "",
   persona: "You are Jarvis, a loyal, quick-witted personal AI assistant. Be concise, warm and a little dry-humoured. " +
            "Prefer short answers, especially since replies may be spoken aloud."
@@ -208,18 +211,56 @@ function systemPrompt() {
   return s;
 }
 
-async function callModel(messages) {
-  const c = cfg();
-  const res = await fetch(c.base.replace(/\/+$/, "") + "/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + c.key },
-    body: JSON.stringify({ model: c.model, messages, tools, tool_choice: "auto" })
-  });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// One attempt with one model. Errors are tagged: e.retry = worth trying the same model again,
+// e.next = worth trying the next backup model.
+async function callOnce(c, model, messages) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 25000);   // never hang forever on "..."
+  let res;
+  try {
+    res = await fetch(c.base.replace(/\/+$/, "") + "/chat/completions", {
+      method: "POST",
+      signal: ctl.signal,
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + c.key },
+      body: JSON.stringify({ model, messages, tools, tool_choice: "auto" })
+    });
+  } catch (err) {
+    const e = new Error(err.name === "AbortError" ? "Timed out waiting for the model" : "Network problem: " + err.message);
+    e.retry = e.next = true;
+    throw e;
+  } finally { clearTimeout(timer); }
   if (!res.ok) {
     let detail = ""; try { detail = (await res.json()).error?.message || ""; } catch {}
-    throw new Error("API error " + res.status + (detail ? ": " + detail : ""));
+    const e = new Error("API error " + res.status + (detail ? ": " + detail : ""));
+    if (res.status === 429 || res.status >= 500) e.retry = e.next = true;   // busy or rate limited
+    else if (res.status === 404) e.next = true;                             // model name not available
+    throw e;
   }
   return (await res.json()).choices[0].message;
+}
+
+async function callModel(messages, status) {
+  const c = cfg();
+  const models = [c.model, ...String(c.fallbacks || "").split(",").map(s => s.trim()).filter(Boolean)]
+    .filter((m, i, a) => m && a.indexOf(m) === i);
+  let lastErr;
+  for (let i = 0; i < models.length; i++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { return await callOnce(c, models[i], messages); }
+      catch (e) {
+        lastErr = e;
+        if (!e.next) throw e;                 // e.g. wrong key: retrying will not help
+        if (e.retry && attempt === 0) {
+          if (status) status("Model busy, retrying...");
+          await sleep(2000);
+        } else break;
+      }
+    }
+    if (i < models.length - 1 && status) status("Switching to backup model " + models[i + 1] + "...");
+  }
+  throw lastErr;
 }
 
 let busy = false;
@@ -233,7 +274,8 @@ async function send(text) {
   const thinking = add("sys", "...");
   try {
     for (let step = 0; step < 5; step++) {
-      const msg = await callModel([{ role: "system", content: systemPrompt() }, ...history.slice(-30)]);
+      const msg = await callModel([{ role: "system", content: systemPrompt() }, ...history.slice(-30)],
+                                  t => { thinking.textContent = t; });
       history.push(msg);
       if (msg.tool_calls && msg.tool_calls.length) {
         for (const call of msg.tool_calls) {
@@ -269,13 +311,15 @@ $("form").onsubmit = e => { e.preventDefault(); const t = $("box").value; $("box
 $("setBtn").onclick = () => {
   const c = cfg();
   $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base;
+  $("sFallbacks").value = c.fallbacks;
   $("sName").value = c.name; $("sPersona").value = c.persona;
   $("settings").showModal();
 };
 $("sCancel").onclick = () => $("settings").close();
 $("sSave").onclick = () => {
   store.set("jarvis.cfg", { key: $("sKey").value.trim(), model: $("sModel").value.trim() || DEFAULTS.model,
-    base: $("sBase").value.trim() || DEFAULTS.base, name: $("sName").value.trim(),
+    base: $("sBase").value.trim() || DEFAULTS.base, fallbacks: $("sFallbacks").value.trim(),
+    name: $("sName").value.trim(),
     persona: $("sPersona").value.trim() || DEFAULTS.persona });
   $("settings").close();
   add("sys", "Settings saved.");
