@@ -473,44 +473,96 @@ function systemPrompt() {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Read a streamed (server-sent events) reply, calling onToken with the text so far.
+async function readStream(res, onToken, bump) {
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = "", content = "", calls = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bump();
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") continue;
+      let j; try { j = JSON.parse(data); } catch { continue; }
+      const d = j.choices && j.choices[0] && j.choices[0].delta;
+      if (!d) continue;
+      if (d.content) { content += d.content; if (onToken) onToken(content); }
+      for (const tc of d.tool_calls || []) {
+        let call;
+        if (tc.index !== undefined && calls[tc.index]) call = calls[tc.index];
+        else if ((tc.function && tc.function.name) || tc.id) {
+          call = { id: tc.id || "", type: "function", function: { name: "", arguments: "" } };
+          if (tc.index !== undefined) calls[tc.index] = call; else calls.push(call);
+        } else call = calls[calls.length - 1];
+        if (!call) continue;
+        if (tc.id) call.id = tc.id;
+        if (tc.function && tc.function.name) call.function.name = tc.function.name;
+        if (tc.function && tc.function.arguments) call.function.arguments += tc.function.arguments;
+      }
+    }
+  }
+  calls = calls.filter(Boolean);
+  calls.forEach((c, i) => { if (!c.id) c.id = "call_" + Date.now() + "_" + i; });
+  if (!content && !calls.length) { const e = new Error("Empty reply from the model"); e.parse = true; throw e; }   // try again without streaming
+  const msg = { role: "assistant", content: content || null };
+  if (calls.length) msg.tool_calls = calls;
+  return msg;
+}
+
 // One attempt with one model. Errors are tagged: e.retry = worth trying the same model again,
-// e.next = worth trying the next backup model.
-async function callOnce(c, model, messages) {
+// e.next = worth trying the next backup model, e.parse = streaming itself broke (try without it).
+async function callOnce(c, model, messages, onToken, stream) {
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 25000);   // never hang forever on "..."
+  let timer = setTimeout(() => ctl.abort(), 25000);     // never hang forever on "..."
+  const bump = () => { clearTimeout(timer); timer = setTimeout(() => ctl.abort(), 25000); };
+  const timeoutErr = () => { const e = new Error("Timed out waiting for the model"); e.retry = e.next = true; return e; };
   let res;
   try {
     res = await fetch(c.base.replace(/\/+$/, "") + "/chat/completions", {
       method: "POST",
       signal: ctl.signal,
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + c.key },
-      body: JSON.stringify({ model, messages, tools, tool_choice: "auto" })
+      body: JSON.stringify({ model, messages, tools, tool_choice: "auto", stream })
     });
   } catch (err) {
-    const e = new Error(err.name === "AbortError" ? "Timed out waiting for the model" : "Network problem: " + err.message);
-    e.retry = e.next = true;
-    throw e;
-  } finally { clearTimeout(timer); }
+    clearTimeout(timer);
+    if (err.name === "AbortError") throw timeoutErr();
+    const e = new Error("Network problem: " + err.message); e.retry = e.next = true; throw e;
+  }
   if (!res.ok) {
+    clearTimeout(timer);
     let detail = ""; try { detail = (await res.json()).error?.message || ""; } catch {}
     const e = new Error("API error " + res.status + (detail ? ": " + detail : ""));
     if (res.status === 429 || res.status >= 500) e.retry = e.next = true;   // busy or rate limited
     else if (res.status === 404) e.next = true;                             // model name not available
     throw e;
   }
-  return (await res.json()).choices[0].message;
+  try {
+    if (!stream) return (await res.json()).choices[0].message;
+    return await readStream(res, onToken, bump);
+  } catch (err) {
+    if (err.retry || err.next) throw err;
+    if (err.name === "AbortError") throw timeoutErr();
+    err.parse = true; throw err;
+  } finally { clearTimeout(timer); }
 }
 
-async function callModel(messages, status) {
+async function callModel(messages, status, onToken) {
   const c = cfg();
   const models = [c.model, ...String(c.fallbacks || "").split(",").map(s => s.trim()).filter(Boolean)]
     .filter((m, i, a) => m && a.indexOf(m) === i);
-  let lastErr;
+  let lastErr, stream = true;
   for (let i = 0; i < models.length; i++) {
     for (let attempt = 0; attempt < 2; attempt++) {
-      try { return await callOnce(c, models[i], messages); }
+      try { return await callOnce(c, models[i], messages, onToken, stream); }
       catch (e) {
         lastErr = e;
+        if (e.parse && stream) { stream = false; attempt--; continue; }   // streaming broke: retry plainly
         if (!e.next) throw e;                 // e.g. wrong key: retrying will not help
         if (e.retry && attempt === 0) {
           if (status) status("Model busy, retrying...");
@@ -536,8 +588,13 @@ async function send(text) {
   const thinking = add("sys", "...");
   try {
     for (let step = 0; step < 5; step++) {
+      let bubble = null;   // the reply appears word by word as it streams in
       const msg = await callModel([{ role: "system", content: systemPrompt() }, ...history.slice(-30)],
-                                  t => { thinking.textContent = t; logActivity(t); });
+                                  t => { thinking.textContent = t; logActivity(t); },
+                                  text => {
+                                    if (!bubble) { thinking.remove(); bubble = add("ai", text); }
+                                    else { bubble.textContent = text; log.scrollTop = log.scrollHeight; }
+                                  });
       history.push(msg);
       if (msg.tool_calls && msg.tool_calls.length) {
         for (const call of msg.tool_calls) {
@@ -552,7 +609,7 @@ async function send(text) {
         continue;
       }
       thinking.remove();
-      add("ai", msg.content || "");
+      if (bubble) bubble.textContent = msg.content || ""; else add("ai", msg.content || "");
       speak(msg.content || "");
       break;
     }
