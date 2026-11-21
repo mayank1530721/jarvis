@@ -758,8 +758,19 @@ async function callOnce(c, model, messages, onToken, stream) {
   }
   if (!res.ok) {
     clearTimeout(timer);
-    let detail = ""; try { detail = (await res.json()).error?.message || ""; } catch {}
-    const e = new Error("API error " + res.status + (detail ? ": " + detail : ""));
+    let detail = "";
+    try {
+      const raw = await res.text();
+      if (raw) {
+        try {
+          const data = JSON.parse(raw);
+          detail = data?.error?.message || data?.message || data?.error?.status || raw;
+        } catch { detail = raw; }
+      }
+    } catch {}
+    // Keep provider diagnostics visible; some compatible APIs return a nonstandard error body.
+    detail = String(detail || "The provider returned no error details").replace(/\\s+/g, " ").slice(0, 700);
+    const e = new Error("API error " + res.status + ": " + detail);
     if (res.status === 429 || res.status >= 500) e.retry = e.next = true;   // busy or rate limited
     else if (res.status === 404) e.next = true;                             // model name not available
     throw e;
