@@ -380,7 +380,7 @@
   <label>Jarvis personality</label>
   <textarea id="sPersona"></textarea>
   <div class="voice-settings">
-    <div class="voice-heading">MODERN JARVIS <small>WARM · REFINED · BRITISH-LEANING</small></div>
+    <div class="voice-heading">MODERN JARVIS <small>MALE · WARM · BRITISH-LEANING</small></div>
     <label for="sVoice">Voice</label>
     <select id="sVoice"><option value="">Loading available voices…</option></select>
     <div class="voice-adjust">
@@ -388,7 +388,7 @@
       <div><label for="sPitch">Pitch <span id="sPitchValue">0.96</span></label><input id="sPitch" type="range" min="0.65" max="1.15" step="0.01" value="0.96"></div>
     </div>
     <button id="sPreview" type="button">▶ Preview JARVIS voice</button>
-    <small>Automatic selection now prioritizes British English voices. The browser uses voices installed on Windows; a premium neural voice can be added later for more natural, expressive speech.</small>
+    <small>Automatic selection prioritizes male British English voices when available. Choose a voice explicitly below if Windows offers several; available voices depend on your system.</small>
   </div>
   <div class="drow"><button id="sCancel" type="button">Cancel</button><button class="primary" id="sSave" type="button">Save</button></div>
 </dialog>
@@ -626,9 +626,12 @@ function refreshVoiceOptions() {
   if (!select) return;
   const previous = voicePrefs.voiceURI || select.value;
   select.innerHTML = "";
-  const preferred = availableVoices.filter(v => /^en-GB/i.test(v.lang));
-  const otherEnglish = availableVoices.filter(v => /^en(-|_)/i.test(v.lang) && !preferred.includes(v));
-  const ordered = [...preferred, ...otherEnglish, ...availableVoices.filter(v => !preferred.includes(v) && !otherEnglish.includes(v))];
+  const isMaleVoice = v => /male|ryan|george|daniel|james|oliver|arthur|brian|thomas|david|mark|guy/i.test(v.name);
+  const british = availableVoices.filter(v => /^en-GB/i.test(v.lang));
+  const britishMale = british.filter(isMaleVoice);
+  const otherEnglish = availableVoices.filter(v => /^en(-|_)/i.test(v.lang) && !british.includes(v));
+  const otherMale = otherEnglish.filter(isMaleVoice);
+  const ordered = [...britishMale, ...otherMale, ...british.filter(v => !isMaleVoice(v)), ...otherEnglish.filter(v => !isMaleVoice(v)), ...availableVoices.filter(v => !/^en(-|_)/i.test(v.lang))];
   if (!ordered.length) {
     select.add(new Option("No system voices found", ""));
     return;
@@ -643,9 +646,10 @@ function selectedVoice() {
     const exact = all.find(v => v.voiceURI === voicePrefs.voiceURI);
     if (exact) return exact;
   }
+  const isMaleVoice = v => /male|ryan|george|daniel|james|oliver|arthur|brian|thomas|david|mark|guy/i.test(v.name);
   const british = all.filter(v => /^en-GB/i.test(v.lang));
   const english = all.filter(v => /^en(-|_)/i.test(v.lang));
-  return british.find(v => /natural|neural|google|microsoft/i.test(v.name)) || british[0] || english.find(v => /natural|neural|google|microsoft/i.test(v.name)) || english[0] || all[0] || null;
+  return british.find(v => isMaleVoice(v) && /natural|neural|google|microsoft/i.test(v.name)) || british.find(isMaleVoice) || english.find(v => isMaleVoice(v) && /natural|neural|google|microsoft/i.test(v.name)) || english.find(isMaleVoice) || british.find(v => /natural|neural|google|microsoft/i.test(v.name)) || british[0] || english[0] || all[0] || null;
 }
 function speak(text) {
   if (!speakOn || !("speechSynthesis" in window)) return;
