@@ -829,7 +829,7 @@
     if (!voices.length) { select.add(new Option("No system voices found", "")); return; }
     select.add(new Option("Automatic · best matching voice", ""));
     for (const v of J.voice.orderVoices(voices, agent(draftAgent).voice))
-      select.add(new Option(v.name + " · " + v.lang + (J.voice.isMale(v.name) ? "" : "  (not a male voice)") + (v.default ? " · default" : ""), v.voiceURI));
+      select.add(new Option(v.name + " · " + v.lang + (agent(draftAgent).voice.gender === "female" ? (J.voice.isFemale(v.name) ? "  (female voice)" : "  (not female)") : (J.voice.isMale(v.name) ? "  (male voice)" : "  (not male voice)")) + (v.default ? " · default" : ""), v.voiceURI));
     select.value = voices.some(v => v.voiceURI === keep) ? keep : "";
   }
   function paintVoiceValues() {
