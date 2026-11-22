@@ -393,7 +393,30 @@
     { type: "function", function: { name: "uplika_publish", description: "Draft a social post. The user is shown the text and channels and must approve before anything is posted, so call this only when they asked to post something. Do not claim it was posted unless the result says it was.",
         parameters: { type: "object", properties: { content: { type: "string", description: "The post text exactly as it should appear." }, channels: { type: "array", items: { type: "string" }, description: "Platform names, handles or ids, e.g. [\"instagram\"]. Omit to use every active channel." } }, required: ["content"] } } }
   ];
-  const toolsFor = id => (id === "jarvis" && uplikaKey()) ? TOOLS.concat(UPLIKA_TOOLS) : TOOLS;
+  // GitHub (code). Only ULTRON has it, once a token is saved. Reading is free; every change needs approval and lands on a new branch as a pull request.
+  const ghToken = () => String(store.get("jarvis.github", "") || "");
+  const GH_TOOLS = [
+    { type: "function", function: { name: "github_repos", description: "List the user's GitHub repositories (name, default branch, private or public)." } },
+    { type: "function", function: { name: "github_read", description: "Read one file, or list a folder, in a GitHub repository. Read before you change anything.",
+        parameters: { type: "object", properties: { repo: { type: "string", description: "owner/name" }, path: { type: "string", description: "File or folder path. Empty for the repository root." }, ref: { type: "string", description: "Branch or commit. Defaults to the default branch." } }, required: ["repo"] } } },
+    { type: "function", function: { name: "github_propose_change", description: "Propose changes to files in a repository. The user sees exactly what will change and must approve; it is then committed to a NEW branch with a pull request. It never changes the default branch and never merges. Give the COMPLETE new content of each file, not a patch. Only call when the user asked for a change.",
+        parameters: { type: "object", properties: {
+          repo: { type: "string", description: "owner/name" }, message: { type: "string", description: "Short commit message." }, branch: { type: "string", description: "Short branch name; ultron/ is added." },
+          files: { type: "array", items: { type: "object", properties: { path: { type: "string" }, content: { type: "string", description: "Full new file content." } }, required: ["path", "content"] } },
+          pr_title: { type: "string" }, pr_body: { type: "string", description: "What changed and why." } }, required: ["repo", "message", "files"] } } }
+  ];
+  const toolsFor = id => TOOLS.concat((id === "jarvis" && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "ultron" && ghToken()) ? GH_TOOLS : []);
+  function askChange(summary) {
+    return new Promise(resolve => {
+      const dlg = $("ghDlg"); $("ghSummary").textContent = summary;
+      let done = false;
+      const end = v => { if (done) return; done = true; $("ghYes").onclick = $("ghNo").onclick = null; dlg.removeEventListener("close", onClose); if (dlg.open) dlg.close(); resolve(v); };
+      const onClose = () => end(false);
+      dlg.addEventListener("close", onClose);
+      $("ghYes").onclick = () => end(true); $("ghNo").onclick = () => end(false);
+      dlg.showModal();
+    });
+  }
   function askApproval(text, where) {
     return new Promise(resolve => {
       const dlg = $("postDlg"); $("postText").value = text; $("postWhere").textContent = "Going to: " + where;
@@ -407,6 +430,22 @@
     });
   }
   const toolImpl = {
+    github_repos: async () => {
+      const list = await J.github.repos(ghToken());
+      return list.length ? list.map(r => r.name + " (" + (r.private ? "private" : "public") + ", default " + r.branch + ")").join("\n") : "The token can see no repositories. Give it access to some on GitHub.";
+    },
+    github_read: async ({ repo, path, ref }) => {
+      const r = await J.github.read(ghToken(), repo, path || "", ref);
+      logActivity("Read " + repo + "/" + (path || ""), S.agent);
+      return r.type === "dir" ? "Folder:\n" + r.entries.join("\n") : r.text + (r.truncated ? "\n[truncated: file is " + r.size + " bytes; ask for a narrower file]" : "");
+    },
+    github_propose_change: async a => {
+      const p = await J.github.plan(ghToken(), { repo: a.repo, message: a.message, branch: a.branch, files: a.files, prTitle: a.pr_title, prBody: a.pr_body });
+      if (!(await askChange(J.github.describe(p)))) { logActivity("Change declined", S.agent); return "The user declined, so nothing was changed."; }
+      const r = await J.github.apply(ghToken(), p);
+      logActivity("Opened " + (r.pr ? "pull request" : "branch") + " on " + p.owner + "/" + p.repo, S.agent);
+      return "Done. " + (r.pr ? "Pull request opened: " : "Branch created: ") + r.url + " (" + r.files + " file(s) on branch " + r.branch + "). The default branch was not changed; the user must review and merge it.";
+    },
     uplika_accounts: async () => {
       const all = await J.uplika.accounts(uplikaKey());
       return all.length ? all.map(a => a.platform + " " + a.handle + " [" + a.status + (a.health && a.health !== "ok" ? ", " + a.health : "") + "] id=" + a.id).join("\n") : "No channels are connected yet. Connect them at https://uplika.com/dashboard/connections.";
@@ -450,6 +489,7 @@
     if (id === "jarvis") s += J.ecosystemPrompt();
     if (id === "jarvis" && uplikaKey()) s += "\nYou are connected to the user's social channels through Uplika (tools uplika_accounts and uplika_publish). Posting always needs the user's approval in a dialog, so never say something is posted until the tool result says it was submitted.";
     if (c.name) s += "\nThe user's name is " + c.name + ".";
+    if (id === "ultron" && ghToken()) s += "\nYou are connected to the user's GitHub. Your earlier limits on touching files are lifted for GitHub: use github_repos and github_read to look at their code, then github_propose_change to suggest edits. Read the relevant files first, make small focused changes with complete file contents, and never invent file contents you have not read. Every change needs the user's approval and arrives as a pull request on a new branch; you cannot merge or change the default branch. Never say a change was made until the tool result says it was.";
     if (id === "ultron") {
       const p = activeProject();
       if (p) s += "\nActive project: " + p.name + (p.notes ? "\nProject notes from the user:\n" + p.notes : "");
@@ -584,7 +624,7 @@
     const thinking = add("sys", "...");
     try {
       let finished = false;
-      for (let step = 0; step < 5; step++) {
+      for (let step = 0; step < 8; step++) {
         let bubble = null;   // the reply appears word by word as it streams in
         const msg = await J.model.call({
           cfg: cfgFor(id), system: systemPrompt(id), history: h, tools: toolsFor(id),
@@ -668,7 +708,7 @@
   }
   $("setBtn").onclick = () => {
     const c = cfg();
-    $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey(); $("sRelay").value = J.uplika.relay;
+    $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey(); $("sGithub").value = ghToken(); $("sRelay").value = J.uplika.relay;
     draft = {}; draftAgent = agent().status === "online" ? S.agent : "jarvis";
     for (const id of onlineAgents()) { const p = J.prefs.get(id); draft[id] = { model: p.model, base: p.base, key: p.key, persona: p.persona, voiceURI: p.voice.voiceURI, rate: p.voice.rate, pitch: p.voice.pitch }; }
     const pick = $("sAgentPick"); pick.innerHTML = "";
@@ -697,6 +737,7 @@
   };
   $("sSave").onclick = () => {
     store.set("jarvis.uplika", $("sUplika").value.trim());
+    store.set("jarvis.github", $("sGithub").value.trim());
     J.uplika.relay = $("sRelay").value.trim(); store.set("jarvis.uplikaRelay", J.uplika.relay);
     store.set("jarvis.cfg", {
       key: $("sKey").value.trim(), model: $("sModel").value.trim() || DEFAULTS.model,

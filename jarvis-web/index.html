@@ -97,6 +97,8 @@
   <div style="margin-top:8px"><button id="sLocal" type="button" style="padding:6px 10px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--c);cursor:pointer;border-radius:6px">Use local model (Ollama, works offline)</button></div>
   <label>Uplika API key (optional, lets JARVIS post to your social channels after you approve each post)</label>
   <input type="password" id="sUplika" placeholder="from uplika.com dashboard, API Keys">
+  <label>GitHub token (optional, lets ULTRON read your repos and propose changes as pull requests)</label>
+  <input type="password" id="sGithub" placeholder="github_pat_... (fine-grained, only the repos you choose)">
   <label>Uplika relay address (only if the browser blocks Uplika; see uplika-relay/)</label>
   <input type="text" id="sRelay" placeholder="https://your-relay.workers.dev">
   <label>Your name</label>
@@ -133,6 +135,13 @@
   <div class="drow"><button id="postNo" type="button">Cancel</button><button class="primary" id="postYes" type="button">Post now</button></div>
 </dialog>
 
+<dialog id="ghDlg">
+  <h3>Approve this change?</h3>
+  <small>ULTRON will create a new branch and open a pull request. Nothing is merged, and your main branch is not touched.</small>
+  <pre id="ghSummary" style="white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto;font:12px/1.5 var(--mono);margin:10px 0"></pre>
+  <div class="drow"><button id="ghNo" type="button">Cancel</button><button class="primary" id="ghYes" type="button">Create branch + PR</button></div>
+</dialog>
+
 <dialog id="memory">
   <h3>What Jarvis remembers</h3>
   <small>Shared by every agent. One fact per line. Say "remember that..." to Jarvis, or edit here.</small>
@@ -163,6 +172,7 @@
 <script src="js/intent.js"></script>
 <script src="js/council.js"></script>
 <script src="js/uplika.js"></script>
+<script src="js/github.js"></script>
 <script src="js/voice.js"></script>
 <script src="js/model.js"></script>
 <script src="js/cores.js"></script>

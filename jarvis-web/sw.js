@@ -1,9 +1,9 @@
 // Keeps the Jarvis page available offline.
 // Online: always fetch the newest file and refresh the saved copy. Offline: use the saved copy.
-const CACHE = "jarvis-page-v15";
+const CACHE = "jarvis-page-v16";
 const SHELL = [
   "./", "./index.html", "./css/theme.css", "./css/app.css",
-  "./js/util.js", "./js/agents.js", "./js/intent.js", "./js/council.js", "./js/uplika.js", "./js/voice.js", "./js/model.js", "./js/cores.js", "./js/app.js"
+  "./js/util.js", "./js/agents.js", "./js/intent.js", "./js/council.js", "./js/uplika.js", "./js/github.js", "./js/voice.js", "./js/model.js", "./js/cores.js", "./js/app.js"
 ];
 
 self.addEventListener("install", e => {

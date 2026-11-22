@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const js = f => path.join(__dirname, "..", "js", f);
 
-require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("uplika.js")); require(js("voice.js")); require(js("model.js"));
+require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("uplika.js")); require(js("github.js")); require(js("voice.js")); require(js("model.js"));
 const J = globalThis.J;
 
 let passed = 0;
@@ -248,6 +248,76 @@ const chunk = delta => ({ choices: [{ delta }] });
   await testAsync("uplika reports a blocked browser call plainly", async () => {
     globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
     await assert.rejects(J.uplika.accounts("K"), /CORS/);
+  });
+
+  // ---- GitHub (against a small fake of the API) ----
+  function fakeGitHub(opts) {
+    opts = opts || {};
+    const st = { files: { "main": { "README.md": "# Hi\nold", "src/a.js": "a" } }, branches: ["main"], log: [], prs: [] };
+    const reply = (status, body) => ({ ok: status < 400, status, json: async () => body });
+    globalThis.fetch = async (url, o) => {
+      o = o || {}; const m = o.method || "GET", u = new URL(url), b = o.body ? JSON.parse(o.body) : null, path = decodeURIComponent(u.pathname);
+      st.log.push(m + " " + path); st.lastAuth = o.headers.authorization;
+      let x;
+      if (m === "GET" && path === "/repos/me/proj") return reply(200, { default_branch: "main" });
+      if (m === "GET" && (x = /^\/repos\/me\/proj\/git\/ref\/heads\/(.+)$/.exec(path))) return st.branches.includes(x[1]) ? reply(200, { object: { sha: "SHA0" } }) : reply(404, { message: "Not Found" });
+      if (m === "POST" && path === "/repos/me/proj/git/refs") { const n = b.ref.replace("refs/heads/", ""); if (st.branches.includes(n) || opts.collide && n === "ultron/add-x") { if (opts.collide) st.branches.push("ultron/add-x"); return reply(422, { message: "Reference already exists" }); } st.branches.push(n); st.files[n] = Object.assign({}, st.files.main); return reply(201, {}); }
+      if ((x = /^\/repos\/me\/proj\/contents\/(.*)$/.exec(path))) {
+        const ref = u.searchParams.get("ref") || "main", set = st.files[ref] || {};
+        if (m === "GET") { if (x[1] in set) return reply(200, { type: "file", encoding: "base64", content: J.github.b64enc(set[x[1]]), sha: "S" + x[1], size: set[x[1]].length }); const dir = Object.keys(set).filter(k => k.startsWith(x[1] ? x[1] + "/" : "")); return dir.length && x[1] === "" ? reply(200, Object.keys(set).map(k => ({ name: k, type: "file" }))) : reply(404, { message: "Not Found" }); }
+        if (m === "PUT") { st.files[b.branch][x[1]] = J.github.b64dec(b.content); return reply(200, {}); }
+      }
+      if (m === "POST" && path === "/repos/me/proj/pulls") { st.prs.push(b); return reply(201, { html_url: "https://github.com/me/proj/pull/7" }); }
+      return reply(404, { message: "Not Found" });
+    };
+    return st;
+  }
+  test("github repo names and URLs parse", () => {
+    assert.deepEqual(J.github.parseRepo("me/proj"), { owner: "me", repo: "proj" });
+    assert.deepEqual(J.github.parseRepo("https://github.com/me/proj.git"), { owner: "me", repo: "proj" });
+    assert.equal(J.github.parseRepo("nonsense"), null);
+  });
+  test("github paths cannot escape the repo", () => { assert.equal(J.github.safePath("../x"), null); assert.equal(J.github.safePath("a/../../x"), null); assert.equal(J.github.safePath("src/a.js"), "src/a.js"); });
+  test("github text survives base64 with non-English characters", () => assert.equal(J.github.b64dec(J.github.b64enc("héllo ✓ 你好")), "héllo ✓ 你好"));
+  await testAsync("github plan marks new and edited files and writes nothing", async () => {
+    const st = fakeGitHub();
+    const p = await J.github.plan("T", { repo: "me/proj", message: "Add x", branch: "add x", files: [{ path: "README.md", content: "# Hi\nnew" }, { path: "src/b.js", content: "b" }, { path: "src/a.js", content: "a" }] });
+    assert.deepEqual(p.files.map(f => f.action), ["edit", "new"]);               // the unchanged file is dropped
+    assert.equal(p.branch, "ultron/add-x"); assert.equal(p.base, "main");
+    assert.ok(st.log.every(l => l.startsWith("GET")), "plan must only read");
+    assert.match(J.github.describe(p), /EDIT {2}README.md[\s\S]*NEW {3}src\/b.js/);
+  });
+  await testAsync("github apply commits to a new branch, opens a PR, never touches main", async () => {
+    const st = fakeGitHub();
+    const p = await J.github.plan("TOK", { repo: "me/proj", message: "Add x", branch: "add x", files: [{ path: "src/b.js", content: "b" }] });
+    const r = await J.github.apply("TOK", p);
+    assert.equal(r.url, "https://github.com/me/proj/pull/7"); assert.equal(st.files["ultron/add-x"]["src/b.js"], "b");
+    assert.equal(st.files.main["src/b.js"], undefined); assert.equal(st.prs[0].base, "main"); assert.equal(st.prs[0].head, "ultron/add-x");
+    assert.equal(st.lastAuth, "Bearer TOK");
+  });
+  await testAsync("github apply picks a fresh branch name if the name is taken", async () => {
+    const st = fakeGitHub({ collide: true });
+    const p = await J.github.plan("T", { repo: "me/proj", message: "x", branch: "add x", files: [{ path: "n.txt", content: "1" }] });
+    const r = await J.github.apply("T", p);
+    assert.notEqual(r.branch, "ultron/add-x"); assert.match(r.branch, /^ultron\/add-x-/);
+  });
+  await testAsync("github refuses to write to the default branch", async () => {
+    fakeGitHub();
+    const p = await J.github.plan("T", { repo: "me/proj", message: "x", files: [{ path: "n.txt", content: "1" }] });
+    p.branch = p.base;
+    await assert.rejects(J.github.apply("T", p), /default branch/);
+  });
+  await testAsync("github rejects bad paths, empty changes and too many files", async () => {
+    fakeGitHub();
+    await assert.rejects(J.github.plan("T", { repo: "me/proj", message: "x", files: [{ path: "../etc", content: "1" }] }), /not allowed/);
+    await assert.rejects(J.github.plan("T", { repo: "me/proj", message: "x", files: [{ path: "src/a.js", content: "a" }] }), /Nothing would change/);
+    await assert.rejects(J.github.plan("T", { repo: "me/proj", message: "x", files: Array.from({ length: 11 }, (_, i) => ({ path: "f" + i, content: "1" })) }), /At most/);
+  });
+  await testAsync("github reads files and folders, with no token it refuses", async () => {
+    fakeGitHub();
+    assert.equal((await J.github.read("T", "me/proj", "README.md")).text, "# Hi\nold");
+    assert.equal((await J.github.read("T", "me/proj", "")).type, "dir");
+    await assert.rejects(J.github.read("", "me/proj", "README.md"), /No GitHub token/);
   });
 
   console.log(process.exitCode ? "\nSome checks FAILED." : "\nAll " + passed + " checks passed.");

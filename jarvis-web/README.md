@@ -19,6 +19,7 @@ It is a small ecosystem: **JARVIS** is the command centre, and specialist agents
 - **DAREDEVIL** is a three-lens council. Say "Convene the council". Steven (CFO: money, hidden costs), Marc (mercenary: feasibility, what breaks first) and Jake (realist: will anyone actually want it) each object, then it ends with VERDICT (approved, conditional or rejected), conditions, a risk register and the cheapest next test, shown in side panels. It approves only when all three agree.
 - **Per-agent models.** In Settings, each agent can have its own model, base URL and key (for example DAREDEVIL on a local Ollama model). A custom endpoint never receives the shared key.
 - **Uplika (social posting).** Paste an Uplika API key in Settings (create one under API Keys in the Uplika dashboard) and JARVIS can list your connected channels and draft posts. Every post opens an approval box showing the text and channels; nothing goes out until you press Post now, and you can edit the text first. The key stays in your browser and is sent only to api.uplika.com. Only JARVIS has this for now; FRIDAY will own it once built. If your browser blocks the call (CORS), deploy the free relay in `uplika-relay/worker.js` on Cloudflare Workers (dash.cloudflare.com > Workers & Pages > Create > Hello World > Edit code > paste the file > Deploy) and paste its address into "Uplika relay address" in Settings.
+- **GitHub for ULTRON.** Paste a GitHub token in Settings and ULTRON can list your repositories, read files, and propose changes. Create the token at github.com > Settings > Developer settings > Personal access tokens > Fine-grained tokens: pick only the repositories you want ULTRON to see, and give it Contents: read and write and Pull requests: read and write. Every change shows you exactly which files will be edited or added, and only after you press the button does ULTRON create a new `ultron/...` branch and open a pull request. It never writes to your main branch and never merges. The token stays in your browser and is sent only to api.github.com.
 - **ULTRON** has a Projects panel (give it the stack and goals for what you are building; it reads the active project's notes in every reply) and a Code blocks panel that collects the code it writes, each with a Copy button.
 - Chat with streamed replies, voice in (Mic button) and voice out, long-term memory ("remember that..."), and tools: time, open a website, search Google, timers.
 - Each agent's voice and personality can be changed in Settings.
@@ -39,6 +40,7 @@ index.html        the page (markup only)
 css/theme.css     colours for each agent (one block per agent)
 css/app.css       layout and components, reads the colours above
 js/agents.js      the agent registry: personas, voices, wording. Add or edit an agent here.
+js/github.js      GitHub connection for ULTRON (read, plan, branch + PR)
 js/uplika.js      Uplika connection (accounts, publish)
 js/council.js     reads DAREDEVIL's verdict, risks and lens lines
 js/intent.js      understands "Unleash ULTRON", yes/no, "stand down"
