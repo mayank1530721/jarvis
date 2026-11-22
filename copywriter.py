@@ -56,6 +56,10 @@ def write_metadata(campaign_rules: str, clip_notes: str) -> dict:
         raise CopywriterError(f"Gemini error {response.status_code}: {response.text[:200]}")
     try:
         text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        text = text.strip()
+        if text.startswith("```"):  # the model sometimes wraps JSON in a code fence
+            text = text.split("\n", 1)[1] if "\n" in text else ""
+            text = text.rsplit("```", 1)[0]
         data = json.loads(text)
         data["title"] = str(data["title"])[:100]
         data["description"] = str(data["description"])

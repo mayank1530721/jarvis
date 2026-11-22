@@ -20,7 +20,7 @@ from telegram.ext import (
 )
 
 from copywriter import CopywriterError, write_metadata
-from publisher import publish_clip
+from publisher import PublishError, publish_clip
 from transcribe import TranscribeError, transcribe
 
 logging.basicConfig(level=logging.INFO)
@@ -135,9 +135,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not draft:
             await query.message.reply_text("No draft to approve. Send /clip first.")
             return
-        await query.message.reply_text(
-            publish_clip(draft["title"], draft["description"], draft["tags"])
-        )
+        try:
+            result = await publish_clip(draft["title"], draft["description"], draft["tags"])
+        except PublishError as error:
+            result = f"Not published. {error}"
+        await query.message.reply_text(result)
     elif query.data == "redo":
         notes = context.user_data.get("notes")
         if not notes:

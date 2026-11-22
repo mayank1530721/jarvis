@@ -11,7 +11,7 @@ A Telegram bot that writes YouTube titles and descriptions that follow a campaig
 - Only your Telegram account can use it.
 
 ## What it does not do yet
-- It does not publish. `publisher.py` is a placeholder until there is an official way to publish.
+- Publishing: with `UPLIKA_API_KEY` in `.env`, pressing Approve sends the title and description to your Uplika channels (optionally limited by `UPLIKA_ACCOUNT_IDS`). It sends text only, so channels that require a video (YouTube Shorts, Reels) are refused by Uplika and still need the video attached in Uplika. Without the key it just tells you to copy the text.
 - It does not browse Content Rewards or control Miniclips. Those are later stages.
 - It cannot phone you. Phone calls generally need a paid phone service, so they are left out to keep this free. Voice notes in Telegram are the free replacement.
 
