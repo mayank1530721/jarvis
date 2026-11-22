@@ -95,6 +95,8 @@
   <input type="text" id="sFallbacks">
   <small>Default is Google Gemini. Change the model, base URL and backups to switch provider later.</small>
   <div style="margin-top:8px"><button id="sLocal" type="button" style="padding:6px 10px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--c);cursor:pointer;border-radius:6px">Use local model (Ollama, works offline)</button></div>
+  <label>Uplika API key (optional, lets JARVIS post to your social channels after you approve each post)</label>
+  <input type="password" id="sUplika" placeholder="from uplika.com dashboard, API Keys">
   <label>Your name</label>
   <input type="text" id="sName">
 
@@ -119,6 +121,14 @@
     <small>Automatic picks the best-matching male English voice installed on your computer. Choose one by hand if you prefer; which voices exist depends on your system.</small>
   </div>
   <div class="drow"><button id="sCancel" type="button">Cancel</button><button class="primary" id="sSave" type="button">Save</button></div>
+</dialog>
+
+<dialog id="postDlg">
+  <h3>Approve this post?</h3>
+  <small id="postWhere"></small>
+  <label>Text (you can edit it before it goes out)</label>
+  <textarea id="postText" style="min-height:140px" maxlength="5000"></textarea>
+  <div class="drow"><button id="postNo" type="button">Cancel</button><button class="primary" id="postYes" type="button">Post now</button></div>
 </dialog>
 
 <dialog id="memory">
@@ -150,6 +160,7 @@
 <script src="js/agents.js"></script>
 <script src="js/intent.js"></script>
 <script src="js/council.js"></script>
+<script src="js/uplika.js"></script>
 <script src="js/voice.js"></script>
 <script src="js/model.js"></script>
 <script src="js/cores.js"></script>

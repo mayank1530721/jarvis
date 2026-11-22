@@ -385,7 +385,42 @@
     { type: "function", function: { name: "set_timer", description: "Set a timer that alerts the user when it ends.",
         parameters: { type: "object", properties: { seconds: { type: "number" }, label: { type: "string" } }, required: ["seconds"] } } }
   ];
+  // Uplika (social posting). Only JARVIS has it for now, only once a key is saved, and every post needs the user's approval.
+  const uplikaKey = () => String(store.get("jarvis.uplika", "") || "");
+  const UPLIKA_TOOLS = [
+    { type: "function", function: { name: "uplika_accounts", description: "List the user's connected social channels (id, platform, handle, status) from Uplika." } },
+    { type: "function", function: { name: "uplika_publish", description: "Draft a social post. The user is shown the text and channels and must approve before anything is posted, so call this only when they asked to post something. Do not claim it was posted unless the result says it was.",
+        parameters: { type: "object", properties: { content: { type: "string", description: "The post text exactly as it should appear." }, channels: { type: "array", items: { type: "string" }, description: "Platform names, handles or ids, e.g. [\"instagram\"]. Omit to use every active channel." } }, required: ["content"] } } }
+  ];
+  const toolsFor = id => (id === "jarvis" && uplikaKey()) ? TOOLS.concat(UPLIKA_TOOLS) : TOOLS;
+  function askApproval(text, where) {
+    return new Promise(resolve => {
+      const dlg = $("postDlg"); $("postText").value = text; $("postWhere").textContent = "Going to: " + where;
+      let done = false;
+      const end = v => { if (done) return; done = true; $("postYes").onclick = $("postNo").onclick = null; dlg.removeEventListener("close", onClose); if (dlg.open) dlg.close(); resolve(v); };
+      const onClose = () => end(null);
+      dlg.addEventListener("close", onClose);
+      $("postYes").onclick = () => end($("postText").value.trim() || null);
+      $("postNo").onclick = () => end(null);
+      dlg.showModal();
+    });
+  }
   const toolImpl = {
+    uplika_accounts: async () => {
+      const all = await J.uplika.accounts(uplikaKey());
+      return all.length ? all.map(a => a.platform + " " + a.handle + " [" + a.status + (a.health && a.health !== "ok" ? ", " + a.health : "") + "] id=" + a.id).join("\n") : "No channels are connected yet. Connect them at https://uplika.com/dashboard/connections.";
+    },
+    uplika_publish: async ({ content, channels }) => {
+      const key = uplikaKey();
+      if (!content || !String(content).trim()) return "No post text was given.";
+      const targets = J.uplika.resolve(await J.uplika.accounts(key), channels);
+      if (!targets.length) return "No matching active channel. Nothing was posted.";
+      const approved = await askApproval(String(content), targets.map(a => a.platform + " " + a.handle).join(", "));
+      if (!approved) { logActivity("Post cancelled", S.agent); return "The user declined, so nothing was posted."; }
+      const res = await J.uplika.publish(key, approved, targets.map(a => a.id));
+      logActivity("Posted to " + targets.length + " channel(s)", S.agent);
+      return "Submitted to Uplika for " + targets.map(a => a.platform + " " + a.handle).join(", ") + ". Uplika response: " + JSON.stringify(res).slice(0, 300);
+    },
     get_time: () => new Date().toString(),
     open_website: ({ url }) => {
       if (!/^https?:\/\//i.test(url)) url = "https://" + url;
@@ -412,6 +447,7 @@
     const c = cfg();
     let s = J.prefs.get(id).persona;
     if (id === "jarvis") s += J.ecosystemPrompt();
+    if (id === "jarvis" && uplikaKey()) s += "\nYou are connected to the user's social channels through Uplika (tools uplika_accounts and uplika_publish). Posting always needs the user's approval in a dialog, so never say something is posted until the tool result says it was submitted.";
     if (c.name) s += "\nThe user's name is " + c.name + ".";
     if (id === "ultron") {
       const p = activeProject();
@@ -550,7 +586,7 @@
       for (let step = 0; step < 5; step++) {
         let bubble = null;   // the reply appears word by word as it streams in
         const msg = await J.model.call({
-          cfg: cfgFor(id), system: systemPrompt(id), history: h, tools: TOOLS,
+          cfg: cfgFor(id), system: systemPrompt(id), history: h, tools: toolsFor(id),
           status: t => { thinking.textContent = t; logActivity(t, id); },
           onToken: txt => {
             if (!bubble) { thinking.remove(); bubble = add("ai", txt); }
@@ -564,7 +600,7 @@
             try {
               const args = JSON.parse(call.function.arguments || "{}");
               logActivity("Tool: " + call.function.name + " " + (Object.values(args)[0] ?? ""), id);
-              out = String(toolImpl[call.function.name] ? toolImpl[call.function.name](args) : "Unknown tool.");
+              out = String(toolImpl[call.function.name] ? await toolImpl[call.function.name](args) : "Unknown tool.");
             } catch (e) { out = "Tool failed: " + e.message; }
             h.push({ role: "tool", tool_call_id: call.id, content: out });
           }
@@ -631,7 +667,7 @@
   }
   $("setBtn").onclick = () => {
     const c = cfg();
-    $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name;
+    $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey();
     draft = {}; draftAgent = agent().status === "online" ? S.agent : "jarvis";
     for (const id of onlineAgents()) { const p = J.prefs.get(id); draft[id] = { model: p.model, base: p.base, key: p.key, persona: p.persona, voiceURI: p.voice.voiceURI, rate: p.voice.rate, pitch: p.voice.pitch }; }
     const pick = $("sAgentPick"); pick.innerHTML = "";
@@ -659,6 +695,7 @@
     $("sModel").focus();
   };
   $("sSave").onclick = () => {
+    store.set("jarvis.uplika", $("sUplika").value.trim());
     store.set("jarvis.cfg", {
       key: $("sKey").value.trim(), model: $("sModel").value.trim() || DEFAULTS.model,
       base: $("sBase").value.trim() || DEFAULTS.base, fallbacks: $("sFallbacks").value.trim(), name: $("sName").value.trim()

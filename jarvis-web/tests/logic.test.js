@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const js = f => path.join(__dirname, "..", "js", f);
 
-require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("voice.js")); require(js("model.js"));
+require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("uplika.js")); require(js("voice.js")); require(js("model.js"));
 const J = globalThis.J;
 
 let passed = 0;
@@ -213,6 +213,36 @@ const chunk = delta => ({ choices: [{ delta }] });
   });
   await testAsync("an empty reply is flagged so the caller can retry without streaming", async () => {
     await assert.rejects(J.model.readStream(fakeStream(["[DONE]"])), e => e.parse === true);
+  });
+
+  // ---- Uplika ----
+  const accts = J.uplika.normalizeAccounts({ data: [
+    { id: "acc_1", platform: "instagram", handle: "@coreclips", status: "active", health: "ok" },
+    { id: "acc_2", platform: "threads", handle: "core", status: "active", health: "expired" },
+    { id: "acc_3", platform: "youtube", handle: "ClipCore", status: "active" },
+    { platform: "x" }] });
+  test("uplika accounts are read from {data:[...]} and junk rows dropped", () => assert.equal(accts.length, 3));
+  test("uplika with no channel named uses only healthy active accounts", () => assert.deepEqual(J.uplika.resolve(accts).map(a => a.id), ["acc_1", "acc_3"]));
+  test("uplika channels match by platform, handle (with or without @) or id", () => {
+    assert.deepEqual(J.uplika.resolve(accts, ["Instagram"]).map(a => a.id), ["acc_1"]);
+    assert.deepEqual(J.uplika.resolve(accts, ["@clipcore"]).map(a => a.id), ["acc_3"]);
+    assert.deepEqual(J.uplika.resolve(accts, ["acc_3"]).map(a => a.id), ["acc_3"]);
+  });
+  test("uplika never selects an expired account even if named", () => assert.deepEqual(J.uplika.resolve(accts, ["threads"]), []));
+  test("uplika errors are explained", () => {
+    assert.match(J.uplika.explain(401, {}), /API key/);
+    assert.match(J.uplika.explain(400, { code: "reconsent_required" }), /reconnected/);
+    assert.match(J.uplika.explain(429, null), /rate limit/);
+  });
+  await testAsync("uplika sends the key only to Uplika, as a bearer token", async () => {
+    let seen; globalThis.fetch = async (u, o) => { seen = { u, o }; return { ok: true, json: async () => ({ data: [] }) }; };
+    await J.uplika.accounts("K123");
+    assert.equal(seen.u, "https://api.uplika.com/v1/accounts"); assert.equal(seen.o.headers.authorization, "Bearer K123");
+  });
+  await testAsync("uplika without a key refuses to call", async () => { await assert.rejects(J.uplika.accounts(""), /No Uplika API key/); });
+  await testAsync("uplika reports a blocked browser call plainly", async () => {
+    globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
+    await assert.rejects(J.uplika.accounts("K"), /CORS/);
   });
 
   console.log(process.exitCode ? "\nSome checks FAILED." : "\nAll " + passed + " checks passed.");
