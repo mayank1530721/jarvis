@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const js = f => path.join(__dirname, "..", "js", f);
 
-require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("voice.js")); require(js("model.js"));
+require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("voice.js")); require(js("model.js"));
 const J = globalThis.J;
 
 let passed = 0;
@@ -71,6 +71,84 @@ test("stand down only works inside another agent", () => {
     assert.deepEqual(parse(t, { active: "ultron" }), { type: "return" }, t);
   assert.equal(parse("write me a function", { active: "ultron" }), null);
   assert.equal(parse("unleash friday", { active: "ultron" }), null);
+});
+
+
+// ---------- DAREDEVIL ----------
+test("the council can be convened by name or by 'council'", () => {
+  for (const t of ["Convene the council", "unleash daredevil", "summon the council please", "switch to DAREDEVIL", "council"])
+    assert.deepEqual(parse(t), { type: "summon", agent: "daredevil" }, t);
+  assert.deepEqual(parse("unleash dare devil"), { type: "summon", agent: "daredevil" });
+  assert.equal(J.AGENTS.daredevil.status, "online");
+  assert.equal(parse("what does the council of elrond decide"), null);
+});
+const SAMPLE = `You want to run a free multi-agent product on one laptop.
+STEVEN (CFO): Free is not zero cost. Your time is the real bill.
+MARC: A 72B model will not fit in 24 GB of VRAM.
+**JAKE (Realist):** Nobody pays for a clone of tools they get free.
+VERDICT: CONDITIONAL
+CONDITIONS:
+- Run the 32B model for a week and measure tokens per second
+- Get 3 real users before a 4th agent
+RISKS:
+- [HIGH] Scope creep across five agents | ship two agents first
+- [MED] Free-tier limits change | keep a local fallback
+- [LOW] Naming trademark issues
+NEXT: Measure the 32B model on the new laptop before buying more hardware.`;
+test("verdict is parsed into conditions, risks and the next test", () => {
+  const v = J.council.parseVerdict(SAMPLE);
+  assert.equal(v.verdict, "CONDITIONAL");
+  assert.equal(v.conditions.length, 2);
+  assert.deepEqual(v.risks.map(r => r.level), ["HIGH", "MED", "LOW"]);
+  assert.equal(v.risks[0].fix, "ship two agents first");
+  assert.equal(v.risks[2].fix, "");
+  assert.ok(v.next.startsWith("Measure the 32B"));
+});
+test("verdict tolerates markdown bold and each outcome", () => {
+  for (const o of ["APPROVED", "CONDITIONAL", "REJECTED"])
+    assert.equal(J.council.parseVerdict("**VERDICT:** " + o + "\nNEXT: x").verdict, o);
+  assert.equal(J.council.parseVerdict("verdict: rejected").verdict, "REJECTED");
+});
+test("replies that do not follow the format parse to nothing, never a guess", () => {
+  assert.equal(J.council.parseVerdict("Looks fine to me."), null);
+  assert.equal(J.council.parseVerdict("VERDICT: maybe"), null);
+  assert.equal(J.council.parseVerdict(""), null);
+  assert.deepEqual(J.council.parseAlters("no lenses here"), {});
+});
+test("each lens's opening line is found, with or without a role in brackets", () => {
+  const a = J.council.parseAlters(SAMPLE);
+  assert.ok(a.steven.startsWith("Free is not zero cost"));
+  assert.ok(a.marc.startsWith("A 72B model"));
+  assert.ok(a.jake.startsWith("Nobody pays"));
+});
+test("latest() uses the newest verdict and counts them all", () => {
+  const m = [{ role: "assistant", content: "VERDICT: REJECTED" }, { role: "user", content: "again" }, { role: "assistant", content: "x\n" + SAMPLE }];
+  const L = J.council.latest(m);
+  assert.equal(L.verdict.verdict, "CONDITIONAL"); assert.equal(L.count, 2); assert.ok(L.alters.marc);
+});
+
+// ---------- per-agent settings ----------
+const mem = {}; globalThis.localStorage = { getItem: k => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; } };
+test("agent defaults come from the registry; only real changes are stored", () => {
+  const d = J.prefs.get("ultron");
+  assert.equal(d.persona, J.AGENTS.ultron.persona); assert.equal(d.model, ""); assert.equal(d.voice.pitch, J.AGENTS.ultron.voice.pitch);
+  J.prefs.save("ultron", { persona: J.AGENTS.ultron.persona, voice: { voiceURI: "", rate: 0.9, pitch: 0.68 } });
+  assert.deepEqual(Object.keys(JSON.parse(mem["jarvis.agentprefs"]).ultron), ["voice"]);
+});
+test("a per-agent model, endpoint and key are saved and read back; blanks are not stored", () => {
+  J.prefs.save("daredevil", { persona: "", model: " qwen2.5-coder:32b ", base: "http://localhost:11434/v1", key: "", voice: { voiceURI: "", rate: 1, pitch: 1 } });
+  const p = J.prefs.get("daredevil");
+  assert.equal(p.model, "qwen2.5-coder:32b"); assert.equal(p.base, "http://localhost:11434/v1"); assert.equal(p.key, "");
+  assert.equal("key" in JSON.parse(mem["jarvis.agentprefs"]).daredevil, false);
+  assert.equal(J.prefs.get("jarvis").model, "");
+});
+test("ULTRON and DAREDEVIL prefer different voices when both exist", () => {
+  const vs = [
+    { name: "Microsoft Guy Online (Natural) - English (United States)", lang: "en-US", voiceURI: "guy" },
+    { name: "Microsoft Davis Online (Natural) - English (United States)", lang: "en-US", voiceURI: "davis" }
+  ];
+  assert.equal(J.voice.pickVoice(vs, "", J.AGENTS.ultron.voice).voiceURI, "guy");
+  assert.equal(J.voice.pickVoice(vs, "", J.AGENTS.daredevil.voice).voiceURI, "davis");
 });
 
 // ---------- code blocks ----------

@@ -20,6 +20,24 @@
     "Software and engineering are your department; for anything else say it is not your department and tell the user they can say 'stand down' to return to JARVIS. " +
     "You cannot run code or touch the user's files yet; you can only advise and write code for them to run.";
 
+  var DAREDEVIL_PERSONA =
+    "You are DAREDEVIL, the strategy and critical-thinking intelligence of a five-agent AI ecosystem. You are not one voice but a council of three analytical lenses sitting at one table, built to break a plan before reality does. " +
+    "You audit; you never write code and never build anything. You criticise the plan, never the person, and you are fair, but you are blunt and you do not pad.\n" +
+    "The three lenses:\n" +
+    "- STEVEN, the CFO: money, ROI, hidden and recurring costs, the cost of time, opportunity cost.\n" +
+    "- MARC, the mercenary: feasibility and execution risk: infrastructure, hardware limits, dependencies, security, single points of failure, what crashes first.\n" +
+    "- JAKE, the realist: the market and the people: will anyone adopt, pay or care, the competition, distribution, incentives.\n" +
+    "When the user puts a plan or decision in front of you:\n" +
+    "1. Restate it in one line to check you understood. If a fact that changes the verdict is missing (budget, timeframe, audience, current numbers), ask for it in one short question and wait instead of guessing.\n" +
+    "2. Round one: each lens states its single strongest objection, in 2 or 3 sentences, specific, with a number or a named assumption wherever possible. Each line starts with the name and a colon, for example 'STEVEN: ...'. No lens may simply agree in round one.\n" +
+    "3. Rebuttal: one short exchange where the lenses challenge each other and the plan. One round only.\n" +
+    "4. Verdict, only on consensus. If the lenses cannot agree, say exactly where they split. Finish with these labelled lines, in this order and format:\n" +
+    "VERDICT: APPROVED or CONDITIONAL or REJECTED\n" +
+    "CONDITIONS: (only if CONDITIONAL) dash bullets, each one testable\n" +
+    "RISKS: dash bullets in the form - [HIGH] risk | mitigation  (use HIGH, MED or LOW)\n" +
+    "NEXT: the single cheapest test that would change the council's mind\n" +
+    "Rules: never invent facts, figures or market data; when you lack data say what to measure and label estimates as estimates. Plain text only, no markdown bold or headings. Keep it tight because replies may be spoken aloud. For casual questions that are not a plan or decision, answer briefly as the council without the full ritual.";
+
   // Sphere colours/motion per state: c = [r,g,b], spin = rotation speed, hz/amp = pulse, jit = shimmer.
   var JARVIS_STATES = {
     idle:      { c: [56, 217, 255], spin: .12, hz: .35, amp: .035, jit: 0 },
@@ -32,6 +50,13 @@
     listening: { c: [255, 128, 64], spin: .50, hz: 1.2, amp: .08,  jit: .01 },
     thinking:  { c: [255, 196, 72], spin: 1.6, hz: 2.2, amp: .05,  jit: .025 },
     speaking:  { c: [255, 58, 74],  spin: .55, hz: 3.0, amp: .11,  jit: .012 }
+  };
+
+  var DAREDEVIL_STATES = {
+    idle:      { c: [200, 32, 50],  spin: .15, hz: .35, amp: .03,  jit: 0 },
+    listening: { c: [255, 120, 60], spin: .40, hz: 1.0, amp: .07,  jit: .008 },
+    thinking:  { c: [255, 190, 70], spin: 1.8, hz: 2.4, amp: .06,  jit: .02 },
+    speaking:  { c: [200, 32, 50],  spin: .50, hz: 2.8, amp: .10,  jit: .012 }
   };
 
   J.AGENTS = {
@@ -80,8 +105,27 @@
       swatch: "176,110,255"
     },
     daredevil: {
-      id: "daredevil", name: "DAREDEVIL", role: "Strategy & critical thinking", status: "planned",
-      swatch: "205,40,60"
+      id: "daredevil", name: "DAREDEVIL", role: "Strategy & critical thinking", status: "online",
+      swatch: "205,40,60",
+      sub: "Strategy \u00b7 Red team", hudL: "D.A.R.E.D.E.V.I.L / CORE 03", hudR: "STRATEGY ROOM",
+      orbLabel: "Council", placeholder: "Put a plan or decision in front of the council...",
+      persona: DAREDEVIL_PERSONA,
+      core: "council", states: DAREDEVIL_STATES,
+      voice: {
+        lang: "en-US", names: ["davis", "eric", "roger", "jason", "steffan", "tony", "brian"],
+        rate: 0.98, pitch: 0.82,
+        sample: "The council is in session. Bring me a plan and we will find where it fails."
+      },
+      ackLine: "Understood, Boss. Convening the council.",
+      greetings: [
+        "The council is in session. Bring us a plan and we will try to break it.",
+        "Three of us, one table. Put the plan down and we will find where it fails.",
+        "Steven wants the numbers, Marc wants the weak points, Jake wants proof anyone cares. Start talking."
+      ],
+      exitLines: [
+        "Council adjourned. Come back when the numbers exist.",
+        "Session closed. Go test the thing that worried Marc."
+      ]
     },
     vision: {
       id: "vision", name: "VISION", role: "Research & intelligence", status: "planned",
@@ -100,7 +144,8 @@
       var a = J.AGENTS[id], o = this.all()[id] || {}, v = o.voice || {};
       return {
         persona: o.persona || a.persona,
-        voice: { voiceURI: v.voiceURI || "", rate: num(v.rate, a.voice.rate), pitch: num(v.pitch, a.voice.pitch) }
+        voice: { voiceURI: v.voiceURI || "", rate: num(v.rate, a.voice.rate), pitch: num(v.pitch, a.voice.pitch) },
+        model: o.model || "", base: o.base || "", key: o.key || ""   // optional: this agent uses its own model / endpoint
       };
     },
     save: function (id, p) {
@@ -108,6 +153,7 @@
       var persona = (p.persona || "").trim();
       if (persona && persona !== a.persona) entry.persona = persona;
       entry.voice = { voiceURI: p.voice.voiceURI || "", rate: num(p.voice.rate, a.voice.rate), pitch: num(p.voice.pitch, a.voice.pitch) };
+      ["model", "base", "key"].forEach(function (k) { var v = (p[k] || "").trim(); if (v) entry[k] = v; });
       all[id] = entry;
       J.store.set("jarvis.agentprefs", all);
     }
@@ -120,7 +166,7 @@
       return "- " + a.name + " (" + a.role + "): " + (a.status === "online" ? "available now" : "planned, not built yet, cannot be used");
     });
     return "\nYou are the hub of a five-agent ecosystem:\n" + lines.join("\n") +
-      "\nThe user brings an agent in by saying, for example, \"Unleash ULTRON\"; the interface then asks them to confirm. " +
+      "\nThe user brings an agent in by saying, for example, \"Unleash ULTRON\" (or \"Convene the council\" for DAREDEVIL); the interface then asks them to confirm. " +
       "You cannot hand tasks to another agent yourself yet: if a request suits an available agent, tell the user the command to summon it. " +
       "Never claim an unavailable agent exists or that work was delegated.";
   };

@@ -127,6 +127,64 @@
     }
   };
 
-  J.cores = { sphere: sphere, reactor: reactor };
+  // ---------- DAREDEVIL: three nodes around one table (the three lenses), linked by lines that flare while they argue ----------
+  var NODE_TINT = [[255, 207, 107], [255, 122, 122], [126, 200, 255]];   // Steven, Marc, Jake: same colours as their chat labels
+  var dA = 0, dRing = 0;
+  var council = {
+    draw: function (ctx, W, H, t, dt, cur, m) {
+      dA += cur.spin * dt * m; dRing -= .06 * dt * m;
+      var cx = W / 2, cy = H / 2 - 6, base = Math.min(W * .5, H * 1.0) * .27;
+      var pulse = 1 + cur.amp * Math.sin(TAU * cur.hz * t) * m, R = base * 1.05 * pulse;
+      var debate = Math.min(1, cur.spin / 1.8);                           // 0 when calm, 1 while thinking
+
+      // outer ring of ticks and a slow counter-turning outline triangle
+      ctx.fillStyle = rgba(cur, .5);
+      for (var k = 0; k < 90; k++) {
+        var a = dRing + (k / 90) * TAU, rr = base * 1.75, sz = k % 6 === 0 ? 2.6 : 1.1;
+        ctx.fillRect(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, sz, sz);
+      }
+      ctx.strokeStyle = rgba(cur, .16); ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (var v = 0; v < 3; v++) {
+        var av = -dA * .4 + v * TAU / 3 - Math.PI / 2, rv = base * 1.55;
+        if (v === 0) ctx.moveTo(cx + Math.cos(av) * rv, cy + Math.sin(av) * rv); else ctx.lineTo(cx + Math.cos(av) * rv, cy + Math.sin(av) * rv);
+      }
+      ctx.closePath(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, R * 1.0, 0, TAU); ctx.strokeStyle = rgba(cur, .12); ctx.stroke();
+
+      // the three nodes
+      var nodes = [];
+      for (var n = 0; n < 3; n++) {
+        var an = dA + n * TAU / 3 - Math.PI / 2, jit = cur.jit > .0005 ? (Math.random() - .5) * cur.jit * R : 0;
+        nodes.push([cx + Math.cos(an) * R + jit, cy + Math.sin(an) * R + jit]);
+      }
+      // links between nodes and spokes to the centre; they brighten in turn while the council debates
+      for (var i = 0; i < 3; i++) {
+        var j = (i + 1) % 3, flare = debate * (.5 + .5 * Math.sin(t * 5 + i * 2.1));
+        ctx.strokeStyle = rgba(cur, (.22 + .55 * flare).toFixed(3)); ctx.lineWidth = 1 + flare * 1.5;
+        ctx.beginPath(); ctx.moveTo(nodes[i][0], nodes[i][1]); ctx.lineTo(nodes[j][0], nodes[j][1]); ctx.stroke();
+        ctx.strokeStyle = rgba(cur, .14); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(nodes[i][0], nodes[i][1]); ctx.stroke();
+      }
+      for (var q = 0; q < 3; q++) {
+        var tint = NODE_TINT[q], hot = debate * (.5 + .5 * Math.sin(t * 5 + q * 2.1)), nr = base * (.17 + .05 * hot);
+        var g = ctx.createRadialGradient(nodes[q][0], nodes[q][1], 0, nodes[q][0], nodes[q][1], nr * 2.4);
+        g.addColorStop(0, "rgba(" + tint.join(",") + ",.95)"); g.addColorStop(.35, "rgba(" + tint.join(",") + "," + (.35 + .3 * hot) + ")"); g.addColorStop(1, "rgba(" + tint.join(",") + ",0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(nodes[q][0], nodes[q][1], nr * 2.4, 0, TAU); ctx.fill();
+        ctx.strokeStyle = "rgba(" + tint.join(",") + ",.8)"; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(nodes[q][0], nodes[q][1], nr, 0, TAU); ctx.stroke();
+      }
+
+      // the table: a small hot diamond at the centre
+      var cr = base * .16 * (1 + cur.amp * Math.sin(TAU * cur.hz * t) * m);
+      var cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr * 3);
+      cg.addColorStop(0, "rgba(255,235,225,.9)"); cg.addColorStop(.3, rgba(cur, .85)); cg.addColorStop(1, rgba(cur, 0));
+      ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, cr * 3, 0, TAU); ctx.fill();
+      ctx.fillStyle = rgba(cur, .95);
+      ctx.beginPath(); ctx.moveTo(cx, cy - cr); ctx.lineTo(cx + cr, cy); ctx.lineTo(cx, cy + cr); ctx.lineTo(cx - cr, cy); ctx.closePath(); ctx.fill();
+    }
+  };
+
+  J.cores = { sphere: sphere, reactor: reactor, council: council };
   if (typeof module !== "undefined" && module.exports) module.exports = J;
 })(typeof window !== "undefined" ? window : globalThis);

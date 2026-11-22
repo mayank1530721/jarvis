@@ -8,8 +8,8 @@
   "use strict";
   var J = root.J = root.J || {};
 
-  var NAMES = "jarvis|ultron|friday|dare\\s?devil|vision";
-  var VERB = "(?:unleash|release|summon|activate|wake(?: up)?|bring(?: up| in| out)?|call(?: in| up| out)?|switch(?: over)? to|go to|" +
+  var NAMES = "jarvis|ultron|friday|dare\\s?devil|vision|council";
+  var VERB = "(?:unleash|release|convene|summon|activate|wake(?: up)?|bring(?: up| in| out)?|call(?: in| up| out)?|switch(?: over)? to|go to|" +
     "talk to|speak (?:to|with)|connect me (?:to|with)|put me through to|hand (?:me )?over to|transfer (?:me )?to|open|load|launch|deploy|" +
     "engage|fire up|boot up|start|enable|get me|i want|i need|let me (?:talk|speak) (?:to|with)|take me to|bring me)";
   var LEAD = "(?:(?:hey|ok|okay|alright|please|jarvis|yo|now|boss|can you|could you|would you|will you|i want you to|i would like to|id like to|i want to|i need to|lets|let us)\\s+)*";
@@ -27,7 +27,7 @@
       .replace(/[.!?,;:…]+/g, " ")
       .replace(/\s+/g, " ").trim();
   }
-  function agentId(raw) { return raw.replace(/\s+/g, ""); }
+  function agentId(raw) { var id = raw.replace(/\s+/g, ""); return id === "council" ? "daredevil" : id; }
 
   // ctx = { pending: agent id waiting for confirmation or null, active: agent id on screen }
   J.parseIntent = function (text, ctx) {

@@ -15,6 +15,16 @@
     name: ""
   };
   const cfg = () => ({ ...DEFAULTS, ...store.get("jarvis.cfg", {}) });
+  // The connection one agent uses: the shared settings, unless that agent has its own model/endpoint/key.
+  // An agent with its own endpoint never receives the shared key (it could be a different service).
+  function cfgFor(id) {
+    const c = cfg(), p = J.prefs.get(id);
+    if (!p.model && !p.base && !p.key) return c;
+    const base = p.base || c.base, local = /localhost|127\.0\.0\.1/.test(base);
+    return { ...c, model: p.model || c.model, base,
+      key: p.key || (p.base ? (local ? "ollama" : "") : c.key),
+      fallbacks: (p.model || p.base) ? "" : c.fallbacks };
+  }
 
   // One-time move of data saved by the older single-agent version into the new per-agent keys.
   (function migrate() {
@@ -74,14 +84,26 @@
     const pre = el("pre"), c = el("code"); c.textContent = code; pre.append(c);
     wrap.append(head, pre); box.append(wrap);
   }
+  // Lines like "STEVEN: ..." or "VERDICT: ..." get a coloured label.
+  const LABEL = /^(\s*[>*_#-]*\s*\**)(STEVEN|MARC|JAKE|VERDICT|CONDITIONS|RISKS|NEXT)\b([^:\n]{0,30}:)/;
+  function appendText(box, str) {
+    const lines = str.split("\n");
+    lines.forEach((line, i) => {
+      const m = LABEL.exec(line);
+      if (m) {
+        box.append(document.createTextNode(m[1]), el("span", "alter a-" + m[2].toLowerCase(), m[2] + m[3]), document.createTextNode(line.slice(m[0].length)));
+      } else box.append(document.createTextNode(line));
+      if (i < lines.length - 1) box.append(document.createTextNode("\n"));
+    });
+  }
   // Show ``` fenced blocks as code boxes with a Copy button. Works while the reply is still streaming.
   function renderRich(box, text) {
     box.textContent = "";
     let i = 0;
     while (i < text.length) {
       const open = text.indexOf("```", i);
-      if (open < 0) { box.append(document.createTextNode(text.slice(i))); break; }
-      if (open > i) box.append(document.createTextNode(text.slice(i, open).replace(/\n$/, "")));
+      if (open < 0) { appendText(box, text.slice(i)); break; }
+      if (open > i) appendText(box, text.slice(i, open).replace(/\n$/, ""));
       const nl = text.indexOf("\n", open + 3);
       if (nl < 0) break;                                  // the fence line is still arriving
       const close = text.indexOf("```", nl + 1);
@@ -105,7 +127,7 @@
       else if (m.role === "assistant" && m.content) add("ai", m.content);
     }
     if (!hist().length) add("sys", cfg().key
-      ? "Jarvis online. Say \"Unleash ULTRON\" to bring in the engineer."
+      ? "Jarvis online. Say \"Unleash ULTRON\" for engineering, or \"Convene the council\" for a hard look at a plan."
       : "Jarvis online. Open Settings and paste your API key to chat. You can already say \"Unleash ULTRON\".");
   }
 
@@ -116,16 +138,16 @@
     for (const [k, v, cls] of rows) { const r = el("div", "row2"); r.append(el("span", "k", k), el("span", "v " + (cls || ""), v)); box.append(r); }
   }
   function linkState() {
-    const c = cfg(), local = /localhost|127\.0\.0\.1/.test(c.base);
+    const c = cfgFor(S.agent), local = /localhost|127\.0\.0\.1/.test(c.base);
     if (!c.key) return { text: "NO KEY", warn: true };
     if (!navigator.onLine && !local) return { text: "OFFLINE", warn: true };
     return { text: "READY", warn: false };
   }
   function renderVitals() {
-    const c = cfg(), l = linkState();
+    const c = cfgFor(S.agent), l = linkState();
     const link = [l.warn ? l.text.charAt(0) + l.text.slice(1).toLowerCase() : "Key set", l.warn ? "warn" : "ok"];
     fillRows($("vitals"), [
-      ["Brain", c.model], ["Link", link[0], link[1]],
+      ["Brain", cfgFor("jarvis").model], ["Link", link[0], link[1]],
       ["Voice out", S.speakOn ? "On" : "Off", S.speakOn ? "ok" : ""],
       ["Voice in", SR ? "Ready" : "Needs Chrome/Edge", SR ? "ok" : "warn"],
       ["Memory", S.memories.length + (S.memories.length === 1 ? " fact" : " facts")],
@@ -133,9 +155,15 @@
     ]);
     const proj = activeProject();
     fillRows($("vitalsU"), [
-      ["Agent", "ULTRON"], ["Brain", c.model], ["Link", link[0], link[1]],
+      ["Agent", "ULTRON"], ["Brain", cfgFor("ultron").model], ["Link", link[0], link[1]],
       ["Voice out", S.speakOn ? "On" : "Off", S.speakOn ? "ok" : ""],
       ["Messages", String(userCount("ultron"))], ["Project", proj ? proj.name : "None", proj ? "ok" : ""]
+    ]);
+    const dd = J.council.latest(hist("daredevil"));
+    fillRows($("vitalsD"), [
+      ["Agent", "DAREDEVIL"], ["Brain", cfgFor("daredevil").model], ["Link", link[0], link[1]],
+      ["Voice out", S.speakOn ? "On" : "Off", S.speakOn ? "ok" : ""],
+      ["Messages", String(userCount("daredevil"))], ["Verdicts", String(dd.count)]
     ]);
     $("hudLink").textContent = l.warn ? l.text : "KEY SET";
     $("hudModel").textContent = c.model.length > 18 ? c.model.slice(0, 17) + "…" : c.model;
@@ -219,6 +247,40 @@
       box.append(row);
     }
   }
+  const LENSES = [
+    ["steven", "STEVEN", "The CFO", "money, ROI, hidden costs", "#ffcf6b"],
+    ["marc", "MARC", "The mercenary", "feasibility, what breaks first", "#ff7a7a"],
+    ["jake", "JAKE", "The realist", "market, adoption, will anyone care", "#7ec8ff"]
+  ];
+  // DAREDEVIL's panels, read straight from the council's own replies; empty when the format was not followed.
+  function renderCouncil() {
+    const L = J.council.latest(hist("daredevil")), v = L.verdict;
+    const box = $("councilList"); box.innerHTML = "";
+    for (const [key, name, role, lens, color] of LENSES) {
+      const r = el("div", "alter-row"), n = el("div", "alter-name", name); n.style.color = color;
+      r.append(n, el("div", "alter-lens", role + " \u00b7 " + lens), el("div", "alter-said", L.alters[key] || "Waiting for a plan."));
+      box.append(r);
+    }
+    const vb = $("verdictBox"); vb.innerHTML = "";
+    if (!v) vb.append(el("div", "empty", "No verdict yet. Put a plan to the council."));
+    else {
+      vb.append(el("div", "vbadge " + v.verdict.toLowerCase(), v.verdict));
+      if (v.conditions.length) { vb.append(el("div", "vsub", "Conditions")); v.conditions.forEach(c => vb.append(el("div", "vtext", "\u2022 " + c))); }
+      if (v.next) { vb.append(el("div", "vsub", "Cheapest test")); vb.append(el("div", "vtext", v.next)); }
+    }
+    const rl = $("riskList"); rl.innerHTML = "";
+    if (!v || !v.risks.length) rl.append(el("div", "empty", "No risks logged yet."));
+    else {
+      const order = { HIGH: 0, MED: 1, LOW: 2 };
+      v.risks.slice().sort((a, b) => order[a.level] - order[b.level]).forEach(r => {
+        const row = el("div", "risk");
+        row.append(el("span", "chip " + r.level.toLowerCase(), r.level), document.createTextNode(r.text));
+        if (r.fix) row.append(el("span", "fix", "Fix: " + r.fix));
+        rl.append(row);
+      });
+    }
+  }
+  function renderPanels() { renderCode(); renderCouncil(); }
   // Title, subtitle, placeholder and HUD text that belong to the active agent.
   function renderChrome() {
     const a = agent();
@@ -226,7 +288,7 @@
     $("hudL").textContent = a.hudL; $("hudR").textContent = a.hudR;
     $("box").placeholder = a.placeholder; document.title = a.name;
   }
-  function renderAll() { renderChrome(); renderVitals(); renderMemList(); renderActivity(); renderTimers(); renderAgents(); renderProjects(); renderCode(); renderHistory(); }
+  function renderAll() { renderChrome(); renderVitals(); renderMemList(); renderActivity(); renderTimers(); renderAgents(); renderProjects(); renderPanels(); renderHistory(); }
 
   const jarvisBoot = Date.now();
   function tickClock() {
@@ -366,7 +428,7 @@
   function agentSay(id, text, maxMs) {
     hist(id).push({ role: "assistant", content: text }); saveHist(id);
     const bubble = S.agent === id ? add("ai", text) : null;
-    renderVitals(); renderAgents(); renderCode();
+    renderVitals(); renderAgents(); renderPanels();
     return { bubble, spoken: say(text, id, maxMs) };
   }
   function clearPending() {
@@ -473,7 +535,11 @@
     text = text.trim();
     if (!text || S.busy || S.switching) return;
     if (await handleCommand(text)) return;
-    if (!cfg().key) { add("sys", "Open Settings and paste your API key first."); return; }
+    if (!cfgFor(S.agent).key) {
+      const own = J.prefs.get(S.agent);
+      add("sys", (own.model || own.base || own.key) ? "This agent has its own endpoint but no API key. Add one for it in Settings, or clear its endpoint." : "Open Settings and paste your API key first.");
+      return;
+    }
     const id = S.agent, h = hist(id);
     S.busy = true; setState("thinking");
     add("me", text); h.push({ role: "user", content: text });
@@ -484,7 +550,7 @@
       for (let step = 0; step < 5; step++) {
         let bubble = null;   // the reply appears word by word as it streams in
         const msg = await J.model.call({
-          cfg: cfg(), system: systemPrompt(id), history: h, tools: TOOLS,
+          cfg: cfgFor(id), system: systemPrompt(id), history: h, tools: TOOLS,
           status: t => { thinking.textContent = t; logActivity(t, id); },
           onToken: txt => {
             if (!bubble) { thinking.remove(); bubble = add("ai", txt); }
@@ -524,7 +590,7 @@
     }
     saveHist(id);
     S.busy = false;
-    renderVitals(); renderCode(); renderAgents();
+    renderVitals(); renderPanels(); renderAgents();
     if (!S.speaking) setState("idle");
   }
   $("form").onsubmit = e => {
@@ -552,12 +618,13 @@
     $("sPitchValue").textContent = Number($("sPitch").value).toFixed(2);
   }
   function formToDraft() {
-    draft[draftAgent] = { persona: $("sPersona").value, voiceURI: $("sVoice").value, rate: Number($("sRate").value), pitch: Number($("sPitch").value) };
+    draft[draftAgent] = { model: $("aModel").value, base: $("aBase").value, key: $("aKey").value, persona: $("sPersona").value, voiceURI: $("sVoice").value, rate: Number($("sRate").value), pitch: Number($("sPitch").value) };
   }
   function draftToForm() {
     const d = draft[draftAgent], a = agent(draftAgent);
     $("sPersonaLabel").textContent = a.name + " personality";
     $("sVoiceHeading").textContent = a.name + " VOICE";
+    $("aModel").value = d.model; $("aBase").value = d.base; $("aKey").value = d.key;
     $("sPersona").value = d.persona; $("sRate").value = d.rate; $("sPitch").value = d.pitch;
     refreshVoiceOptions(); paintVoiceValues();
     for (const b of $("sAgentPick").children) b.classList.toggle("on", b.dataset.id === draftAgent);
@@ -566,7 +633,7 @@
     const c = cfg();
     $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name;
     draft = {}; draftAgent = agent().status === "online" ? S.agent : "jarvis";
-    for (const id of onlineAgents()) { const p = J.prefs.get(id); draft[id] = { persona: p.persona, voiceURI: p.voice.voiceURI, rate: p.voice.rate, pitch: p.voice.pitch }; }
+    for (const id of onlineAgents()) { const p = J.prefs.get(id); draft[id] = { model: p.model, base: p.base, key: p.key, persona: p.persona, voiceURI: p.voice.voiceURI, rate: p.voice.rate, pitch: p.voice.pitch }; }
     const pick = $("sAgentPick"); pick.innerHTML = "";
     for (const id of onlineAgents()) {
       const b = el("button", "", agent(id).name); b.type = "button"; b.dataset.id = id;
@@ -599,7 +666,7 @@
     formToDraft();
     for (const id of onlineAgents()) {
       const d = draft[id];
-      J.prefs.save(id, { persona: d.persona, voice: { voiceURI: d.voiceURI, rate: d.rate, pitch: d.pitch } });
+      J.prefs.save(id, { persona: d.persona, model: d.model, base: d.base, key: d.key, voice: { voiceURI: d.voiceURI, rate: d.rate, pitch: d.pitch } });
     }
     $("settings").close();
     add("sys", "Settings saved.");

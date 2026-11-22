@@ -48,6 +48,16 @@
     <section class="panel grow"><div class="ph">Activity</div><div class="rows" data-render="activity"></div></section>
   </aside>
 
+  <!-- DAREDEVIL workspace: the council room -->
+  <aside class="col left" data-only="daredevil">
+    <section class="panel"><div class="ph">Session</div><div id="vitalsD"></div></section>
+    <section class="panel grow"><div class="ph">The council</div><div class="rows" id="councilList"></div></section>
+  </aside>
+  <aside class="col right" data-only="daredevil">
+    <section class="panel"><div class="ph">Verdict</div><div id="verdictBox"></div></section>
+    <section class="panel grow"><div class="ph">Risk register</div><div class="rows" id="riskList"></div></section>
+  </aside>
+
   <main class="center">
     <div class="stage">
       <div class="hud-orbit orbit-a"></div><div class="hud-orbit orbit-b"></div><div class="hud-orbit orbit-c"></div>
@@ -91,6 +101,12 @@
   <div class="agent-pick" id="sAgentPick"></div>
   <label id="sPersonaLabel">Personality</label>
   <textarea id="sPersona"></textarea>
+  <label>Model for this agent only (optional; blank uses the shared model above)</label>
+  <input type="text" id="aModel" placeholder="e.g. qwen2.5-coder:32b">
+  <label>API base URL for this agent only (optional; e.g. http://localhost:11434/v1 for Ollama)</label>
+  <input type="text" id="aBase">
+  <label>API key for this agent only (optional; local servers need none)</label>
+  <input type="password" id="aKey" placeholder="leave blank to reuse the shared key on the shared URL">
   <div class="voice-settings">
     <div class="voice-heading"><span id="sVoiceHeading">VOICE</span> <small>EACH AGENT HAS ITS OWN</small></div>
     <label for="sVoice">Voice</label>
@@ -133,6 +149,7 @@
 <script src="js/util.js"></script>
 <script src="js/agents.js"></script>
 <script src="js/intent.js"></script>
+<script src="js/council.js"></script>
 <script src="js/voice.js"></script>
 <script src="js/model.js"></script>
 <script src="js/cores.js"></script>
