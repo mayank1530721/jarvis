@@ -323,3 +323,11 @@ body[data-agent="friday"] .core-reticle span { border-color:rgba(214,180,255,.9)
 @media(max-width:1050px) {
   body[data-agent="friday"] .friday-side { display:none !important; }
 }
+
+/* BLACK VAULT */
+#vaultBtn{border-color:rgba(176,110,255,.55);color:#d7b7ff}
+.vault-status{margin:12px 0;padding:9px;border:1px solid rgba(176,110,255,.35);color:#d7b7ff;font:11px/1.5 var(--mono)}
+#vaultSetup,#vaultUnlock,#vaultContent{margin-top:12px}
+#vaultCreate,#vaultUnlockBtn,#vaultReviewBtn{margin-top:8px;width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;color:var(--text);background:rgba(176,110,255,.12);cursor:pointer}
+#vaultContent[hidden],#vaultSetup[hidden],#vaultUnlock[hidden]{display:none}
+#vaultNotes[readonly]{opacity:.82}
