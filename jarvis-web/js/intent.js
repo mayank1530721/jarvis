@@ -10,14 +10,18 @@
 
   // "kh?onsh?u" also catches how speech recognition tends to spell him (Konshu, Khonsu). "dare devil" still works as his old name.
   var NAMES = "jarvis|ultron|friday|kh?onsh?u|dare\\s?devil|vision|council";
-  var VERB = "(?:unleash|release|convene|summon|activate|wake(?: up)?|bring(?: up| in| out)?|call(?: in| up| out)?|switch(?: over)? to|go to|" +
+  var VERB = "(?:unleash|release|convene|summon|activate|wake(?: up)?|bring(?: up| in| out| on)?|call(?: in| up| out| on)?|switch(?: over)? to|go to|" +
+    "get|grab|fetch|give me|pull up|pull in|put on|put me on to|send for|send in|hand (?:this|it) (?:over )?to|pass (?:this|it|me) to|ask for|" +
     "talk to|speak (?:to|with)|connect me (?:to|with)|put me through to|hand (?:me )?over to|transfer (?:me )?to|open|load|launch|deploy|" +
     "engage|fire up|boot up|start|enable|get me|i want|i need|let me (?:talk|speak) (?:to|with)|take me to|bring me)";
   var LEAD = "(?:(?:hey|ok|okay|alright|please|jarvis|yo|now|boss|can you|could you|would you|will you|i want you to|i would like to|id like to|i want to|i need to|lets|let us)\\s+)*";
   var TAIL = "(?:\\s+(?:now|please|for me|right now|already|boss|sir|online|up))*$";
 
   var SUMMON = new RegExp("^" + LEAD + VERB + "\\s+(?:up\\s+)?(?:the\\s+)?(" + NAMES + ")" + TAIL);
-  var BARE = new RegExp("^(?:the\\s+)?(" + NAMES + ")(?:\\s+(?:now|please|online|boss|sir))*$");
+  // The same, followed by what the user wants done: "get ultron to fix the login bug", "bring in the council for this plan".
+  // The job must be introduced by to / and / for / so / about / with / on, so "call ultron a villain" is still just chat.
+  var SUMMON_TASK = new RegExp("^" + LEAD + VERB + "\\s+(?:up\\s+)?(?:the\\s+)?(" + NAMES + ")(?:\\s+(?:in|up|out|on|over))?\\s+(?:to|and|for|so|about|with|on)\\s+\\S.*$");
+  var BARE = new RegExp("^(?:(?:hey|ok|okay|yo|oi|hi)\\s+)?(?:the\\s+)?(" + NAMES + ")(?:\\s+(?:now|please|online|boss|sir|here))*$");
   var RETURN = /^(?:(?:ok|okay|alright|please|thanks|thank you|yes|boss|hey)\s+)*(?:stand down|return(?: to jarvis)?|go back(?: to jarvis)?|back to jarvis|switch(?: back)? to jarvis|bring (?:back )?jarvis(?: back)?|jarvis take over|jarvis come back|get jarvis|call jarvis|talk to jarvis|speak to jarvis|dismissed|power down|thats enough)(?:\s+(?:now|please|boss|sir))*$/;
   var CONFIRM = /^(?:(?:ok|okay|alright|boss|jarvis)\s+)*(?:yes|yeah|yep|yup|sure|confirm|confirmed|affirmative|do it|go ahead|proceed|absolutely|certainly|definitely|i am sure|i am certain|i am|im sure|im certain|release (?:him|it)|unleash (?:him|it)|go for it)(?:\s+(?:please|boss|sir|jarvis|im sure|im certain))*$/;
   var CANCEL = /^(?:no|nope|nah|cancel|stand down|abort|negative|never ?mind|not yet|wait|hold on|dont|stop)(?:\s+(?:please|boss|sir|jarvis))*$/;
@@ -44,6 +48,8 @@
       if (CANCEL.test(t)) return { type: "cancel" };
       m = SUMMON.exec(t) || BARE.exec(t);
       if (m) return agentId(m[1]) === ctx.pending ? { type: "confirm" } : { type: "summon", agent: agentId(m[1]) };
+      m = SUMMON_TASK.exec(t);   // "get ultron to fix the login bug" while the question is open: confirm, and take the job along
+      if (m) return agentId(m[1]) === ctx.pending ? { type: "confirm", task: String(text).trim() } : { type: "summon", agent: agentId(m[1]), task: String(text).trim() };
       return { type: "cancel", passthrough: true };   // anything else: drop the question, treat it as a normal message
     }
 
@@ -53,6 +59,8 @@
 
     m = SUMMON.exec(t) || BARE.exec(t);
     if (m) return { type: "summon", agent: agentId(m[1]) };
+    m = SUMMON_TASK.exec(t);
+    if (m) return { type: "summon", agent: agentId(m[1]), task: String(text).trim() };   // the agent gets the whole request once it is released
     return null;
   };
 
