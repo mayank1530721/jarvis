@@ -253,6 +253,43 @@ test("a long run of tool calls never produces an empty transcript or loses the t
   assert.equal(J.model.recentHistory([{ role: "assistant", content: "hi" }], 30).length, 1);
 });
 
+
+// ---------- understanding how people actually ask ----------
+test("more ways of asking for an agent are understood, including a job to carry over", () => {
+  const c = { pending: null, active: "jarvis" };
+  for (const t of ["get ultron", "Grab Ultron please", "hey ultron", "get me ultron", "i need ultron", "pull up ultron", "yo khonshu", "can you get khonshu"])
+    assert.equal(J.parseIntent(t, c).type, "summon", t);
+  assert.equal(J.parseIntent("get ultron", c).task, undefined);
+  const withTask = J.parseIntent("Get Ultron to fix the login bug!", c);
+  assert.equal(withTask.agent, "ultron"); assert.equal(withTask.task, "Get Ultron to fix the login bug!");
+  assert.equal(J.parseIntent("bring in the council for this plan", c).agent, "khonshu");
+  assert.equal(J.parseIntent("pull up ultron and have him check app.js", c).task, "pull up ultron and have him check app.js");
+});
+test("sentences that only mention an agent are still just chat", () => {
+  const c = { pending: null, active: "jarvis" };
+  for (const t of ["call ultron a villain", "tell me about unleashing ultron in the film", "get ultron out of the way", "who is vision in marvel", "ultron was voiced by james spader"])
+    assert.equal(J.parseIntent(t, c), null, t);
+});
+test("a task given with the summon survives the confirmation question", () => {
+  const c = { pending: "ultron", active: "jarvis" };
+  assert.equal(J.parseIntent("yes", c).type, "confirm");
+  const again = J.parseIntent("get ultron to fix the login bug", c);                  // same agent, now with a job: confirm and carry it
+  assert.equal(again.type, "confirm"); assert.equal(again.task, "get ultron to fix the login bug");
+  const other = J.parseIntent("get khonshu to review my plan", c);                     // a different agent: ask about that one instead
+  assert.equal(other.type, "summon"); assert.equal(other.agent, "khonshu"); assert.equal(other.task, "get khonshu to review my plan");
+});
+
+// ---------- every agent talks like a person ----------
+test("every agent gets the same short speaking guide, and scripted lines come in several versions", () => {
+  assert.match(J.STYLE, /typos/); assert.match(J.STYLE, /do not reuse the same opener/); assert.match(J.STYLE, /use your tools/);
+  assert.ok(J.STYLE.length < 1800, "sent with every request, so keep it small");
+  for (const k of ["confirm", "alreadyHere", "alreadyOn", "cancel"]) assert.ok(J.lines[k].length >= 2, k);
+  assert.ok(J.lines.confirm.every(l => l.includes("{name}")));
+  for (const id of ["ultron", "khonshu"]) assert.ok(J.AGENTS[id].ackLines.length >= 3, id);
+  assert.ok(J.AGENTS.jarvis.welcomeBack.length >= 3);
+  assert.doesNotMatch(J.AGENTS.jarvis.persona, /professional, intelligent, composed, articulate/);   // the old stiff butler wording
+  assert.match(J.ecosystemPrompt(), /switch_agent/);
+});
 (async () => {
   await testAsync("plain text streams in", async () => {
     const seen = [];
@@ -394,6 +431,45 @@ test("a long run of tool calls never produces an empty transcript or loses the t
     assert.equal((await J.github.read("T", "me/proj", "")).type, "dir");
     await assert.rejects(J.github.read("", "me/proj", "README.md"), /No GitHub token/);
   });
+
+  // ---------- two providers backing each other up ----------
+  const goodReply = text => ({ ok: true, json: async () => ({ choices: [{ message: { role: "assistant", content: text } }] }) });
+  const badReply = (status, msg) => ({ ok: false, status, text: async () => JSON.stringify({ error: { message: msg } }) });
+  const PRIMARY = { key: "gk", model: "llama-3.3-70b-versatile", base: "https://api.groq.com/openai/v1", fallbacks: "" };
+  const BACKUP = { cfg: { key: "mk", model: "gemini-x", base: "https://generativelanguage.googleapis.com/v1beta/openai", fallbacks: "" }, label: "the shared provider" };
+  const base = { system: "s", history: [{ role: "user", content: "hi" }], tools: [] };
+  const realSleep = globalThis.setTimeout;
+
+  await testAsync("when Groq is rate-limited the same request goes to the other provider", async () => {
+    const hits = []; const notes = [];
+    globalThis.fetch = async (u, o) => { hits.push(u); return u.includes("groq") ? badReply(429, "rate limit reached") : goodReply("from backup"); };
+    globalThis.setTimeout = (f) => realSleep(f, 0);   // skip the 2 second retry wait
+    try {
+      const msg = await J.model.call({ ...base, cfg: PRIMARY, alt: BACKUP, status: t => notes.push(t) });
+      assert.equal(msg.content, "from backup");
+      assert.ok(hits.some(u => u.includes("groq")) && hits.some(u => u.includes("generativelanguage")));
+      assert.ok(notes.some(n => /trying the shared provider/.test(n)), notes.join("|"));
+    } finally { globalThis.setTimeout = realSleep; }
+  });
+  await testAsync("a rejected Groq key also falls back, so a typo in one key does not stop the agent", async () => {
+    globalThis.fetch = async u => u.includes("groq") ? badReply(401, "Invalid API Key") : goodReply("still working");
+    assert.equal((await J.model.call({ ...base, cfg: PRIMARY, alt: BACKUP })).content, "still working");
+  });
+  await testAsync("with no backup the first error is raised as before", async () => {
+    globalThis.fetch = async () => badReply(401, "Invalid API Key");
+    await assert.rejects(() => J.model.call({ ...base, cfg: PRIMARY }), /API error 401: Invalid API Key/);
+    await assert.rejects(() => J.model.call({ ...base, cfg: PRIMARY, alt: { cfg: { ...BACKUP.cfg, key: "" }, label: "x" } }), /401/, "a backup with no key is ignored");
+  });
+  await testAsync("if both providers fail, the error names both", async () => {
+    globalThis.fetch = async u => badReply(401, u.includes("groq") ? "Invalid groq key" : "Invalid gemini key");
+    await assert.rejects(() => J.model.call({ ...base, cfg: PRIMARY, alt: BACKUP }), /Invalid groq key.*the shared provider also failed: .*Invalid gemini key/);
+  });
+  await testAsync("a working first provider is used alone", async () => {
+    const hits = []; globalThis.fetch = async u => { hits.push(u); return goodReply("primary"); };   // (a non-streaming reply makes it retry once plainly, still on the same provider)
+    assert.equal((await J.model.call({ ...base, cfg: PRIMARY, alt: BACKUP })).content, "primary");
+    assert.ok(hits.length >= 1 && hits.every(u => u.includes("groq")), hits.join(","));
+  });
+
 
   console.log(process.exitCode ? "\nSome checks FAILED." : "\nAll " + passed + " checks passed.");
 })();

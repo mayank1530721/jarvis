@@ -85,6 +85,7 @@
       } catch (e3) {}
       detail = String(detail || "The provider returned no error details").replace(/\s+/g, " ").slice(0, 700);
       var he = new Error("API error " + res.status + ": " + detail);
+      he.status = res.status;
       if (res.status === 429 || res.status >= 500) he.retry = he.next = true;   // busy or rate limited
       else if (res.status === 404) he.next = true;                              // model name not available
       throw he;
@@ -130,7 +131,7 @@
   }
 
   // opts: { cfg, system, history, tools, status(text), onToken(text) }
-  async function call(opts) {
+  async function callProvider(opts) {
     var c = opts.cfg;
     var models = [c.model].concat(String(c.fallbacks || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean))
       .filter(function (m, i, a) { return m && a.indexOf(m) === i; });
@@ -154,6 +155,20 @@
     throw lastErr;
   }
 
-  J.model = { call: call, readStream: readStream, recentHistory: recentHistory, compactToolResults: compactToolResults };
+  // Same as callProvider, plus an optional second provider (opts.alt = { cfg, label }). If the first one fails for
+  // any provider reason (rate limit, outage, network, wrong key or model), the same request goes to the second, so
+  // Groq and Gemini back each other up. If both fail, the error says so.
+  async function call(opts) {
+    try { return await callProvider(opts); }
+    catch (e) {
+      var alt = opts.alt;
+      if (!alt || !alt.cfg || !alt.cfg.key || !(e.next || e.status)) throw e;
+      if (opts.status) opts.status("That provider failed, trying " + (alt.label || "the backup provider") + "...");
+      try { return await callProvider(Object.assign({}, opts, { cfg: alt.cfg, alt: null })); }
+      catch (e2) { e.message = e.message + " | " + (alt.label || "Backup provider") + " also failed: " + e2.message; throw e; }
+    }
+  }
+
+  J.model = { call: call, callProvider: callProvider, readStream: readStream, recentHistory: recentHistory, compactToolResults: compactToolResults };
   if (typeof module !== "undefined" && module.exports) module.exports = J;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -17,14 +17,11 @@
   const cfg = () => ({ ...DEFAULTS, ...store.get("jarvis.cfg", {}) });
   // The connection one agent uses: the shared settings, unless that agent has its own model/endpoint/key.
   // An agent with its own endpoint never receives the shared key (it could be a different service).
+  const groqKey = () => String(store.get("jarvis.groqKey", "") || "");
+  const groqCfg = model => ({ ...cfg(), model: model || "llama-3.3-70b-versatile", base: "https://api.groq.com/openai/v1", key: groqKey(), fallbacks: "" });
   function cfgFor(id) {
     const c = cfg(), p = J.prefs.get(id);
-    if (p.provider === "groq") return {
-      ...c, model: p.model || "llama-3.3-70b-versatile",
-      base: "https://api.groq.com/openai/v1",
-      key: store.get("jarvis.groqKey", ""),
-      fallbacks: ""
-    };
+    if (p.provider === "groq") return groqCfg(p.model);
     if (!p.model && !p.base && !p.key) return c;
     const base = p.base || c.base, local = /localhost|127\.0\.0\.1/.test(base);
     return { ...c, model: p.model || c.model, base,
@@ -422,6 +419,16 @@
           files: { type: "array", items: { type: "object", properties: { path: { type: "string" }, content: { type: "string", description: "Full new file content." } }, required: ["path", "content"] } },
           pr_title: { type: "string" }, pr_body: { type: "string", description: "What changed and why." } }, required: ["repo", "message", "files"] } } }
   ];
+  // The other provider to try if the first fails. Only JARVIS and ULTRON can use Groq. If one of them uses Groq, the shared provider
+  // is the backup; if one uses the shared provider and a Groq key is saved, Groq is the backup.
+  function altFor(id) {
+    if (id !== "jarvis" && id !== "ultron") return null;
+    const p = J.prefs.get(id), shared = cfg();
+    if (p.provider === "groq") return shared.key ? { cfg: shared, label: "the shared provider" } : null;
+    if (!p.model && !p.base && !p.key && groqKey()) return { cfg: groqCfg(), label: "Groq" };
+    return null;
+  }
+
   // Desktop agent (hands). Only ULTRON has it, once its token is saved. Looking is free; writing a file or running a command needs approval.
   const handsToken = () => String(store.get("jarvis.agentToken", "") || "");
   const handsBase = () => String(store.get("jarvis.agentBase", "") || "") || J.hands.DEFAULT_BASE;
@@ -444,7 +451,13 @@
     parameters: { type: "object", properties: {
       agent: { type: "string", enum: consultTargets(id).map(x => x), description: "Which agent to ask (lowercase id)." },
       question: { type: "string", description: "What you want their view on, self-contained." } }, required: ["agent", "question"] } } });
-  const toolsFor = id => TOOLS.concat((id === "jarvis" && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "ultron" && ghToken()) ? GH_TOOLS : [], (id === "ultron" && handsToken()) ? HANDS_TOOLS : [],
+  const switchTargets = () => J.AGENT_ORDER.filter(x => x !== "jarvis" && agent(x).status === "online");
+  const SWITCH_TOOL = () => ({ type: "function", function: { name: "switch_agent",
+    description: "Bring a specialist agent in to work with the user. Use it whenever the user wants an agent to take over or handle something, in any wording ('get ultron', 'I need the engineer', 'let the council look at this plan', 'bring in khonshu to review it'). The interface asks the user to confirm, then the agent starts on the job. Pass the job in the user's own words so the agent can start straight away.",
+    parameters: { type: "object", properties: {
+      agent: { type: "string", enum: switchTargets(), description: "Which agent (lowercase id)." },
+      task: { type: "string", description: "What the user wants done, in their words. Empty if they only asked for the agent." } }, required: ["agent"] } } });
+  const toolsFor = id => TOOLS.concat((id === "jarvis" && switchTargets().length) ? [SWITCH_TOOL()] : [], (id === "jarvis" && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "ultron" && ghToken()) ? GH_TOOLS : [], (id === "ultron" && handsToken()) ? HANDS_TOOLS : [],
     consultTargets(id).length ? [consultTool(id)] : []);
   // Ask before a file write or command. "Allow for this task" approves the rest of this one request (S.autoTask).
   function askHands(title, summary) {
@@ -531,6 +544,14 @@
       const r = await J.hands.run(handsBase(), handsToken(), command, cwd || "", secs);
       return J.hands.formatRun(r);
     },
+    switch_agent: async ({ agent: to, task }) => {
+      const tid = String(to || "").toLowerCase().replace(/\s+/g, ""), a = J.AGENTS[tid];
+      if (!a || a.status !== "online" || tid === "jarvis") return "That agent is not available. Available: " + (switchTargets().join(", ") || "none") + ".";
+      if (S.agent !== "jarvis") return "Only JARVIS can switch agents. Tell the user to say 'stand down' first.";
+      await handleSummon(tid, String(task || "").trim(), true);
+      S.endTurn = true;   // the confirmation question is the reply; no further model call
+      return "The user was asked to confirm bringing in " + a.name + ". Do not say the switch has happened.";
+    },
     consult_agent: async ({ agent: to, question }) => {
       const from = S.agent, tid = String(to || "").toLowerCase().replace(/\s+/g, ""), target = J.AGENTS[tid];
       const options = consultTargets(from).map(x => x).join(", ");
@@ -541,7 +562,7 @@
       S.consults++;
       add("sys", agent(from).name + " asks " + target.name + ": " + question);
       logActivity(agent(from).name + " consulted " + target.name, from);
-      const msg = await J.model.call({ cfg: cfgFor(tid), system: consultPrompt(tid, from), history: [{ role: "user", content: String(question) }], tools: [], status: () => {} });
+      const msg = await J.model.call({ cfg: cfgFor(tid), alt: altFor(tid), system: consultPrompt(tid, from), history: [{ role: "user", content: String(question) }], tools: [], status: () => {} });
       const reply = String(msg.content || "").trim() || "(no answer)";
       add("sys", target.name + " answers: " + reply);
       return target.name + " answered:\n" + reply;
@@ -587,7 +608,7 @@
   function consultPrompt(id, fromId) {
     const c = cfg();
     let s = J.prefs.get(id).persona;
-    s += "\nYou are being consulted by " + agent(fromId).name + ", another agent in the same ecosystem, on behalf of the user. Answer in your own voice and from your own specialty, in plain text and under 120 words. Be direct, and disagree if you disagree. You cannot use tools or consult anyone else here. Do not write a formal verdict block.";
+    s += "\n" + J.STYLE + "\nYou are being consulted by " + agent(fromId).name + ", another agent in the same ecosystem, on behalf of the user. Answer in your own voice and from your own specialty, in plain text and under 120 words. Be direct, and disagree if you disagree. You cannot use tools or consult anyone else here. Do not write a formal verdict block.";
     if (c.name) s += "\nThe user's name is " + c.name + ".";
     if (S.memories.length) s += "\nThings you remember about the user:\n- " + S.memories.join("\n- ");
     return s;
@@ -606,6 +627,7 @@
       if (p) s += "\nActive project: " + p.name + (p.notes ? "\nProject notes from the user:\n" + p.notes : "");
     }
     if (S.memories.length) s += "\nThings you remember about the user:\n- " + S.memories.join("\n- ");
+    s += "\n" + J.STYLE;
     s += "\nCurrent time: " + new Date().toString();
     return s;
   }
@@ -636,18 +658,21 @@
     await runIntent(intent, echo);
   }
 
-  async function handleSummon(id) {
+  async function handleSummon(id, task, fromTool) {
     const a = agent(id);
-    if (id === S.agent) { agentSay(S.agent, id === "jarvis" ? "I'm already here, Boss." : "I'm already on it."); return; }
+    if (id === S.agent) { agentSay(S.agent, J.pick(id === "jarvis" ? J.lines.alreadyHere : J.lines.alreadyOn)); return; }
     if (a.status !== "online") {
       const ready = J.AGENT_ORDER.filter(x => x !== "jarvis" && agent(x).status === "online").map(x => agent(x).name);
-      agentSay("jarvis", a.name + " isn't online yet, Boss. " + a.role + " is on the roadmap, but no workspace has been built for it." +
+      agentSay("jarvis", a.name + " isn't online yet. " + a.role + " is on the roadmap, but nothing has been built for it." +
         (ready.length ? " " + ready.join(" and ") + (ready.length > 1 ? " are" : " is") + " available right now." : ""));
       return;
     }
     clearPending();
-    S.pending = { agent: id };
-    const r = agentSay("jarvis", "Boss, are you certain you wish to release " + a.name + "?");
+    S.pending = { agent: id, task: task || "" };
+    const line = J.pick(J.lines.confirm).replace("{name}", a.name);
+    // From the model's switch tool the line is shown but not written into the chat history, which must stay
+    // "assistant tool call, then its tool result" with nothing in between.
+    const r = fromTool ? { bubble: add("ai", line), spoken: say(line, "jarvis") } : agentSay("jarvis", line);
     S.pending.bubble = r.bubble;
     addConfirmButtons(r.bubble, a);
   }
@@ -656,7 +681,8 @@
     clearPending();
     const a = agent(p.agent);
     logActivity("Releasing " + a.name, "jarvis");
-    await agentSay("jarvis", a.ackLine || "Understood, Boss.", 6000).spoken;
+    await agentSay("jarvis", J.pick(a.ackLines || ["Understood."]), 6000).spoken;
+    if (p.task) S.carry = p.task;   // the job the user already gave goes to the agent as soon as it is released
     await switchAgent(p.agent);
   }
   async function returnToJarvis() {
@@ -690,14 +716,15 @@
     S.busy = true;
     try {
       if (echo) userSay(echo);
-      if (it.type === "confirm") await confirmSummon();
-      else if (it.type === "cancel") { clearPending(); agentSay("jarvis", "Very well, Boss. Standing by."); }
-      else if (it.type === "summon") await handleSummon(it.agent);
+      if (it.type === "confirm") { if (it.task && S.pending) S.pending.task = it.task; await confirmSummon(); }
+      else if (it.type === "cancel") { clearPending(); agentSay("jarvis", J.pick(J.lines.cancel)); }
+      else if (it.type === "summon") await handleSummon(it.agent, it.task);
       else if (it.type === "return") await returnToJarvis();
     } finally {
       S.busy = false;
       if (!S.speaking) setState("idle");
     }
+    if (S.carry) { const job = S.carry; S.carry = null; await send(job); }
   }
   async function handleCommand(text) {
     const it = J.parseIntent(text, { pending: S.pending ? S.pending.agent : null, active: S.agent });
@@ -741,7 +768,7 @@
       for (let step = 0; step < maxSteps; step++) {
         let bubble = null;   // the reply appears word by word as it streams in
         const msg = await J.model.call({
-          cfg: cfgFor(id), system: systemPrompt(id), history: h, tools: toolsFor(id),
+          cfg: cfgFor(id), alt: altFor(id), system: systemPrompt(id), history: h, tools: toolsFor(id),
           status: t => { thinking.textContent = t; logActivity(t, id); },
           onToken: txt => {
             if (!bubble) { thinking.remove(); bubble = add("ai", txt); }
@@ -759,6 +786,7 @@
             } catch (e) { out = "Tool failed: " + e.message; }
             h.push({ role: "tool", tool_call_id: call.id, content: out });
           }
+          if (S.endTurn) { S.endTurn = false; thinking.remove(); finished = true; break; }
           continue;
         }
         thinking.remove();
@@ -819,7 +847,8 @@
     $("aProvider").disabled = !["jarvis", "ultron"].includes(draftAgent);
     $("aModel").value = d.model; $("aBase").value = d.base; $("aKey").value = d.key;
     const usingGroq = $("aProvider").value === "groq";
-    $("aModel").placeholder = usingGroq ? "e.g. llama-3.3-70b-versatile" : "e.g. qwen2.5-coder:32b";
+    $("aModel").placeholder = usingGroq ? "default llama-3.3-70b-versatile; for coding try openai/gpt-oss-120b" : "e.g. qwen2.5-coder:32b";
+    if (usingGroq) $("aModel").setAttribute("list", "groqModels"); else $("aModel").removeAttribute("list");
     $("aBase").disabled = usingGroq; $("aKey").disabled = usingGroq;
     $("sPersona").value = d.persona; $("sRate").value = d.rate; $("sPitch").value = d.pitch;
     refreshVoiceOptions(); paintVoiceValues();
