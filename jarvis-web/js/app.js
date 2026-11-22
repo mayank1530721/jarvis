@@ -926,7 +926,8 @@
   $("vaultChat").onclick=()=>{if(!J.vault.isUnlocked()||J.vault.mode()!=="private")return;if(!["jarvis","friday"].includes(S.agent)){$("vaultStatus").textContent="Switch to JARVIS or FRIDAY first.";return;}S.privateChat=true;S.privateHistory=[];$("vaultDlg").close();$("log").innerHTML="";add("sys","BLACK VAULT PRIVATE SESSION · JARVIS and FRIDAY only · chat is not saved to normal history. Lock the vault to end.");$("box").placeholder="Private conversation with "+agent().name+"...";};
   $("vaultClose").onclick=()=>$("vaultDlg").close();
   $("vaultLock").onclick=()=>{J.vault.lock();S.privateChat=false;S.privateHistory=[];$("vaultPass").value="";$("vaultReviewPass").value="";$("vaultNotes").value="";$("vaultDlg").close();renderHistory();$("box").placeholder=agent().placeholder;add("sys","Black Vault locked. Private session cleared.");};
-\n  // ---------- memory, agents and project dialogs ----------
+
+  // ---------- memory, agents and project dialogs ----------
   const openMemory = () => { $("mText").value = S.memories.join("\n"); $("memory").showModal(); };
   $("memBtn").onclick = openMemory; $("memEdit").onclick = openMemory;
   $("mCancel").onclick = () => $("memory").close();
