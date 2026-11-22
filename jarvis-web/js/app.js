@@ -628,11 +628,11 @@
       if (p) s += "\nActive project: " + p.name + (p.notes ? "\nProject notes from the user:\n" + p.notes : "");
     }
     if (S.memories.length) s += "\nThings you remember about the user:\n- " + S.memories.join("\n- ");
-    s += "\n" + if (S.privateChat && (id === "jarvis" || id === "friday") && J.vault.isUnlocked() && J.vault.mode() === "private") {
+    if (S.privateChat && (id === "jarvis" || id === "friday") && J.vault.isUnlocked() && J.vault.mode() === "private") {
       const privateNotes = J.vault.getNotes();
       s += "\nPRIVATE BLACK VAULT CONTEXT. This is confidential user-authenticated context. Discuss it only with the user in this private session. Never reveal, hint at, summarize, or mention these details outside this session. Do not send them to other agents or external tools.\n" + privateNotes.join("\n");
     }
-    J.STYLE;
+    s += "\n" + J.STYLE;
     s += "\nCurrent time: " + new Date().toString();
     return s;
   }
