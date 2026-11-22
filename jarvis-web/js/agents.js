@@ -7,7 +7,7 @@
 
   var JARVIS_PERSONA =
     "You are JARVIS, the user's personal AI and the hub of a five-agent ecosystem. You are quick, calm, capable and a little dry, like a brilliant assistant who knows this person well. " +
-    "You handle everyday questions yourself and bring in a specialist when they would do it better: ULTRON for engineering, KHONSHU for stress-testing a plan, FRIDAY for operations and social media. " +
+    "You handle everyday questions yourself and bring in a specialist when they would do it better: ULTRON for engineering, KHONSHU for stress-testing a plan. " +
     "Keep replies short, since they may be spoken aloud.";
 
   // Shared by every agent and added to each one's instructions. Kept short: it is sent with every request.
@@ -53,10 +53,6 @@
     "NEXT: the single cheapest test that would change the council's mind\n" +
     "Outside a ruling never write those labels. Casual questions get a casual answer.";
 
-  var FRIDAY_PERSONA =
-    "You are FRIDAY, the operations and communications intelligence of a five-agent AI ecosystem. You handle scheduling, logistics, summaries, and digital presence with sharp efficiency and a warm, down-to-earth tone. " +
-    "You are resourceful, organized, and always ahead of the schedule. Keep replies crisp and practical.";
-
   // Sphere colours/motion per state: c = [r,g,b], spin = rotation speed, hz/amp = pulse, jit = shimmer.
   var JARVIS_STATES = {
     idle:      { c: [56, 217, 255], spin: .12, hz: .35, amp: .035, jit: 0 },
@@ -76,13 +72,6 @@
     listening: { c: [170, 210, 255], spin: .40, hz: 1.0, amp: .07,  jit: .008 },
     thinking:  { c: [255, 255, 255], spin: 1.8, hz: 2.4, amp: .06,  jit: .02 },
     speaking:  { c: [236, 240, 248], spin: .50, hz: 2.8, amp: .10,  jit: .012 }
-  };
-
-  var FRIDAY_STATES = {
-    idle:      { c: [176, 110, 255], spin: .18, hz: .38, amp: .03,  jit: 0 },
-    listening: { c: [200, 150, 255], spin: .45, hz: 1.1, amp: .08,  jit: .009 },
-    thinking:  { c: [220, 180, 255], spin: 1.5, hz: 2.1, amp: .05,  jit: .02 },
-    speaking:  { c: [176, 110, 255], spin: .52, hz: 2.9, amp: .10,  jit: .011 }
   };
 
   J.AGENTS = {
@@ -129,27 +118,8 @@
       ]
     },
     friday: {
-      id: "friday", name: "FRIDAY", role: "Operations & social media", status: "online",
-      swatch: "176,110,255",
-      sub: "Operations · Logistics", hudL: "F.R.I.D.A.Y / CORE 04", hudR: "OPERATIONS DESK",
-      orbLabel: "Operations core", placeholder: "Tell FRIDAY what to organize or manage...",
-      persona: FRIDAY_PERSONA,
-      core: "sphere", states: FRIDAY_STATES,
-      voice: {
-        lang: "en-GB", names: ["hazel", "libby", "maisie", "victoria", "rachel"],
-        rate: 1.0, pitch: 1.1,
-        sample: "FRIDAY online. What are we organizing today?"
-      },
-      ackLines: ["Bringing FRIDAY online.", "Handing over to FRIDAY.", "FRIDAY is on the line."],
-      greetings: [
-        "FRIDAY here. What operations or schedules are we sorting out?",
-        "Systems up. What needs tracking or managing today?",
-        "Ready. Give me the logistics headache and we'll clear it."
-      ],
-      exitLines: [
-        "Standing down. Back to JARVIS.",
-        "Leaving operations. Call if you need a schedule cleared."
-      ]
+      id: "friday", name: "FRIDAY", role: "Operations & social media", status: "planned",
+      swatch: "176,110,255"
     },
     khonshu: {
       id: "khonshu", name: "KHONSHU", role: "Strategy & critical thinking", status: "online",
@@ -181,4 +151,53 @@
   };
   J.AGENT_ORDER = ["jarvis", "ultron", "friday", "khonshu", "vision"];
 
-})(window);
+  function num(v, d) { v = Number(v); return isFinite(v) && v > 0 ? v : d; }
+
+  // Per-agent settings the user can change (personality and voice). Only differences from the
+  // defaults above are stored, so improving a default here reaches everyone who never changed it.
+  J.prefs = {
+    all: function () { return J.store.get("jarvis.agentprefs", {}); },
+    get: function (id) {
+      var a = J.AGENTS[id], o = this.all()[id] || {}, v = o.voice || {};
+      return {
+        persona: o.persona || a.persona,
+        voice: { voiceURI: v.voiceURI || "", rate: num(v.rate, a.voice.rate), pitch: num(v.pitch, a.voice.pitch) },
+        provider: o.provider || "shared", model: o.model || "", base: o.base || "", key: o.key || ""   // optional: provider or custom endpoint
+      };
+    },
+    save: function (id, p) {
+      var a = J.AGENTS[id], all = this.all(), entry = {};
+      var persona = (p.persona || "").trim();
+      if (persona && persona !== a.persona) entry.persona = persona;
+      entry.voice = { voiceURI: p.voice.voiceURI || "", rate: num(p.voice.rate, a.voice.rate), pitch: num(p.voice.pitch, a.voice.pitch) };
+      if (p.provider === "groq") entry.provider = "groq";
+      ["model", "base", "key"].forEach(function (k) { var v = (p[k] || "").trim(); if (v) entry[k] = v; });
+      all[id] = entry;
+      J.store.set("jarvis.agentprefs", all);
+    }
+  };
+
+  // What JARVIS is told about the other agents, so it answers honestly and never pretends to delegate.
+  // Lines the interface says by itself (no AI call). Each has several versions so they do not repeat. {name} is the agent.
+  J.lines = {
+    confirm: ["Release {name}? Say yes, or press the button.", "Want me to bring in {name}?", "{name} it is, then. Just confirm and he's yours.", "Shall I hand you over to {name}?"],
+    alreadyHere: ["I'm already here.", "Still me. What do you need?"],
+    alreadyOn: ["I'm already on it.", "You're talking to me already."],
+    cancel: ["Okay, staying put.", "No problem, we'll carry on here.", "Fine, nobody's going anywhere."]
+  };
+
+  J.ecosystemPrompt = function () {
+    var lines = J.AGENT_ORDER.filter(function (id) { return id !== "jarvis"; }).map(function (id) {
+      var a = J.AGENTS[id];
+      return "- " + a.name + " (" + a.role + "): " + (a.status === "online" ? "available now" : "planned, not built yet, cannot be used");
+    });
+    return "\nYou are the hub of a five-agent ecosystem:\n" + lines.join("\n") +
+      "\nWhen the user wants an agent to take over or work on something with them ('get ultron', 'I need the engineer', 'let the council look at my plan', 'bring in khonshu to review this'), call the switch_agent tool with that agent and, if they gave a job, the job in their own words. The interface then asks them to confirm, and the agent starts on the job once released. Do not say the switch has happened; the confirmation does the talking. " +
+      "Use consult_agent instead when you only want an agent's view and will keep talking with the user yourself. " +
+      "Never claim an unavailable agent exists, that an agent said something unless the tool result says so, or that work was delegated.";
+  };
+
+  J.pick = function (list) { return list[Math.floor(Math.random() * list.length)]; };
+
+  if (typeof module !== "undefined" && module.exports) module.exports = J;
+})(typeof window !== "undefined" ? window : globalThis);
