@@ -919,7 +919,19 @@
     $("vaultDlg").showModal();
   }
   $("vaultBtn").onclick=showVault;
-  $("vaultCreate").onclick=async()=>{try{await J.vault.setup($("vaultNewPass").value,$("vaultReviewNew").value);$("vaultNewPass").value="";$("vaultReviewNew").value="";$("vaultSetup").hidden=true;$("vaultUnlock").hidden=true;$("vaultContent").hidden=false;$("vaultNotes").value="";$("vaultNotes").readOnly=false;$("vaultSave").hidden=false;$("vaultChat").hidden=false;$("vaultStatus").textContent="VAULT CREATED · private access unlocked";}catch(e){$("vaultStatus").textContent=e.message;}};
+  $("vaultCreate").onclick=async()=>{
+    const button=$("vaultCreate"),status=$("vaultStatus");
+    if(button.disabled)return;
+    button.disabled=true;button.textContent="Creating…";status.textContent="Starting secure vault creation…";
+    try{
+      await J.vault.setup($("vaultNewPass").value,$("vaultReviewNew").value,message=>{status.textContent=message;});
+      $("vaultNewPass").value="";$("vaultReviewNew").value="";
+      $("vaultSetup").hidden=true;$("vaultUnlock").hidden=true;$("vaultContent").hidden=false;
+      $("vaultNotes").value="";$("vaultNotes").readOnly=false;$("vaultSave").hidden=false;$("vaultChat").hidden=false;
+      status.textContent="VAULT CREATED · encrypted and verified in this browser.";
+    }catch(e){status.textContent="Vault creation failed: "+(e&&e.message?e.message:String(e));}
+    finally{button.disabled=false;button.textContent="Create encrypted vault";}
+  };
   $("vaultUnlockBtn").onclick=async()=>{try{await J.vault.unlock($("vaultPass").value,"private");$("vaultPass").value="";$("vaultUnlock").hidden=true;$("vaultContent").hidden=false;$("vaultNotes").value=J.vault.getNotes().join("\n");$("vaultNotes").readOnly=false;$("vaultSave").hidden=false;$("vaultChat").hidden=false;$("vaultStatus").textContent="PRIVATE ACCESS · JARVIS and FRIDAY only";}catch(e){$("vaultStatus").textContent="Could not unlock: "+e.message;}};
   $("vaultReviewBtn").onclick=async()=>{try{await J.vault.unlock($("vaultReviewPass").value,"review");$("vaultReviewPass").value="";$("vaultUnlock").hidden=true;$("vaultContent").hidden=false;$("vaultNotes").value=J.vault.getNotes().join("\n");$("vaultNotes").readOnly=true;$("vaultSave").hidden=true;$("vaultChat").hidden=true;$("vaultStatus").textContent="REVIEW ONLY · editing and chat disabled";}catch(e){$("vaultStatus").textContent="Could not review: "+e.message;}};
   $("vaultSave").onclick=async()=>{try{await J.vault.save($("vaultNotes").value.split("\n").map(x=>x.trim()).filter(Boolean));$("vaultStatus").textContent="Saved · encrypted in this browser";}catch(e){$("vaultStatus").textContent=e.message;}};
