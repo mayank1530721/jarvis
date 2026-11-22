@@ -32,6 +32,7 @@ body [data-only] { display: none; }
 body[data-agent="jarvis"] [data-only="jarvis"],
 body[data-agent="ultron"] [data-only="ultron"],
 body[data-agent="khonshu"] [data-only="khonshu"] { display: flex; }
+body[data-agent="friday"] [data-only="friday"] { display: flex; }
 
 #app {
   position: relative; z-index: 1; height: 100%; display: grid; gap: 16px; padding: 18px;
@@ -290,4 +291,35 @@ dialog small { color: var(--dim); }
   .stage::after, .orbit-a, .orbit-b, .orbit-c, .hud-scan, .core-reticle, .system-chip::before, #orbLabel::before, .warp-ring { animation: none; }
   .panel, .actions button, form button { transition: none; }
   #warp, #warp.on { transition: none; }
+}
+
+
+/* FRIDAY operations desk */
+body[data-agent="friday"] .stage {
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(176,110,255,.20), transparent 43%),
+    linear-gradient(135deg, rgba(28,14,48,.5), rgba(8,4,18,.2));
+}
+body[data-agent="friday"] .stage::before { width:min(58%,430px); border-style:dashed; transform:translate(-50%,-50%) rotateX(62deg); }
+body[data-agent="friday"] .stage::after { width:min(68%,500px); border-style:solid; opacity:.55; animation-duration:42s; }
+body[data-agent="friday"] .hud-orbit { border-style:dashed; }
+body[data-agent="friday"] .core-reticle { width:min(34%,245px); border-radius:22%; transform:translate(-50%,-50%) rotate(45deg); }
+body[data-agent="friday"] .core-reticle span { border-color:rgba(214,180,255,.9); }
+.friday-status { display:flex; align-items:center; gap:12px; padding:12px 4px 16px; }
+.friday-pulse { width:11px; height:11px; border-radius:50%; background:#b06eff; box-shadow:0 0 18px #b06eff; animation:pulse 2s ease-in-out infinite; }
+.friday-status b,.friday-action b,.friday-board-card b { display:block; font:600 11px var(--mono); letter-spacing:1.4px; color:var(--text); }
+.friday-status small,.friday-action small,.friday-board-card small { display:block; margin-top:4px; color:var(--dim); font:10px/1.5 var(--mono); }
+.friday-metrics { display:grid; grid-template-columns:1fr 1fr; gap:8px; border-top:1px solid var(--line); padding-top:12px; }
+.friday-metrics div { display:flex; flex-direction:column; gap:3px; }
+.friday-metrics b { color:var(--c); font:600 20px var(--mono); }
+.friday-metrics small { color:var(--dim); font:9px var(--mono); letter-spacing:1px; }
+.friday-action { display:flex; gap:12px; align-items:center; padding:15px 4px; border-bottom:1px solid rgba(var(--base-rgb),.12); }
+.friday-action>span { color:var(--c); font:11px var(--mono); opacity:.8; }
+.friday-board-card { display:grid; grid-template-columns:24px 1fr auto; align-items:start; gap:9px; padding:14px 2px; border-bottom:1px solid rgba(var(--base-rgb),.12); }
+.friday-board-icon { color:var(--c); font-size:18px; text-shadow:0 0 12px rgba(var(--base-rgb),.55); }
+.friday-board-card em { color:var(--c); font:9px var(--mono); font-style:normal; letter-spacing:1px; }
+.friday-note p { color:var(--text); font-size:12px; line-height:1.7; margin:5px 0 12px; }
+.friday-note>span { color:var(--dim); font:9px var(--mono); letter-spacing:1.5px; }
+@media(max-width:1050px) {
+  body[data-agent="friday"] .friday-side { display:none !important; }
 }
