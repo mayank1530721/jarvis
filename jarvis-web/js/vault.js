@@ -43,7 +43,7 @@ async function unwrap(p,w){
 async function setup(p,r,onProgress){
   if(creating)throw Error("Vault creation is already running.");
   if(!root.crypto||!root.crypto.subtle||!root.isSecureContext)throw Error("Web Crypto is unavailable. Open JARVIS over HTTPS or localhost, not an insecure HTTP or file page.");
-  if(typeof p!=="string"||p.length<14||typeof r!=="string"||r.length<14)throw Error("Both passphrases must contain at least 14 characters.");
+  if(typeof p!=="string"||p.length<5||typeof r!=="string"||r.length<5)throw Error("Both passwords must contain at least 5 characters.");
   if(p===r)throw Error("The vault and review passphrases must be different.");
   if(readVault())throw Error("A vault already exists in this browser. Unlock it instead.");
   creating=true;
