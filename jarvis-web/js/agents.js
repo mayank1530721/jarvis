@@ -7,7 +7,7 @@
 
   var JARVIS_PERSONA =
     "You are JARVIS, the user's personal AI and the hub of a five-agent ecosystem. You are quick, calm, capable and a little dry, like a brilliant assistant who knows this person well. " +
-    "You handle everyday questions yourself and bring in a specialist when they would do it better: ULTRON for engineering, KHONSHU for stress-testing a plan. " +
+    "You handle everyday questions yourself and bring in a specialist when they would do it better: ULTRON for engineering, KHONSHU for stress-testing a plan, FRIDAY for operations and communications. " +
     "Keep replies short, since they may be spoken aloud.";
 
   // Shared by every agent and added to each one's instructions. Kept short: it is sent with every request.
@@ -54,6 +54,10 @@
     "Outside a ruling never write those labels. Casual questions get a casual answer.";
 
   // Sphere colours/motion per state: c = [r,g,b], spin = rotation speed, hz/amp = pulse, jit = shimmer.
+  var FRIDAY_PERSONA =
+    "You are FRIDAY, the operations and communications intelligence of a five-agent AI ecosystem. You handle planning, scheduling, logistics, coordination, and clear summaries with sharp efficiency and a warm, down-to-earth tone. " +
+    "You are resourceful, organized, practical, and concise. Be honest about which external actions you can and cannot perform.";
+
   var JARVIS_STATES = {
     idle:      { c: [56, 217, 255], spin: .12, hz: .35, amp: .035, jit: 0 },
     listening: { c: [93, 255, 176], spin: .30, hz: 1.1, amp: .09,  jit: .01 },
@@ -72,6 +76,13 @@
     listening: { c: [170, 210, 255], spin: .40, hz: 1.0, amp: .07,  jit: .008 },
     thinking:  { c: [255, 255, 255], spin: 1.8, hz: 2.4, amp: .06,  jit: .02 },
     speaking:  { c: [236, 240, 248], spin: .50, hz: 2.8, amp: .10,  jit: .012 }
+  };
+
+  var FRIDAY_STATES = {
+    idle:      { c: [176, 110, 255], spin: .18, hz: .38, amp: .03,  jit: 0 },
+    listening: { c: [200, 150, 255], spin: .45, hz: 1.1, amp: .08,  jit: .009 },
+    thinking:  { c: [220, 180, 255], spin: 1.5, hz: 2.1, amp: .05,  jit: .02 },
+    speaking:  { c: [176, 110, 255], spin: .52, hz: 2.9, amp: .10,  jit: .011 }
   };
 
   J.AGENTS = {
@@ -118,8 +129,27 @@
       ]
     },
     friday: {
-      id: "friday", name: "FRIDAY", role: "Operations & social media", status: "planned",
-      swatch: "176,110,255"
+      id: "friday", name: "FRIDAY", role: "Operations & communications", status: "online",
+      swatch: "176,110,255",
+      sub: "Operations · Logistics", hudL: "F.R.I.D.A.Y / CORE 04", hudR: "OPERATIONS DESK",
+      orbLabel: "Operations core", placeholder: "Tell FRIDAY what to plan or organize...",
+      persona: FRIDAY_PERSONA,
+      core: "sphere", states: FRIDAY_STATES,
+      voice: {
+        lang: "en-GB", names: ["hazel", "libby", "maisie", "victoria", "rachel"],
+        rate: 1.0, pitch: 1.1,
+        sample: "FRIDAY online. What are we organizing today?"
+      },
+      ackLines: ["Bringing FRIDAY online.", "Handing over to FRIDAY.", "FRIDAY is on the line."],
+      greetings: [
+        "FRIDAY here. What operations or schedules are we sorting out?",
+        "Systems up. What needs tracking or organizing today?",
+        "Ready. Give me the logistics headache and we'll clear it."
+      ],
+      exitLines: [
+        "Standing down. Back to JARVIS.",
+        "Leaving operations. Call if you need a schedule cleared."
+      ]
     },
     khonshu: {
       id: "khonshu", name: "KHONSHU", role: "Strategy & critical thinking", status: "online",
