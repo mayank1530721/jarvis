@@ -67,6 +67,7 @@
     speakOn: store.get("jarvis.speak", false),
     memories: store.get("jarvis.memories", []),
     histories: {},          // agent id -> API-format messages, each agent keeps its own
+    privateChat: false, privateHistory: [],
     pending: null           // { agent, bubble, row } while JARVIS waits for "are you certain?"
   };
   const hist = id => { id = id || S.agent; return S.histories[id] || (S.histories[id] = store.get("jarvis.history." + id, [])); };
@@ -627,6 +628,10 @@
       if (p) s += "\nActive project: " + p.name + (p.notes ? "\nProject notes from the user:\n" + p.notes : "");
     }
     if (S.memories.length) s += "\nThings you remember about the user:\n- " + S.memories.join("\n- ");
+    if (S.privateChat && (id === "jarvis" || id === "friday") && J.vault.isUnlocked() && J.vault.mode() === "private") {
+      const privateNotes = J.vault.getNotes();
+      s += "\nPRIVATE BLACK VAULT CONTEXT. This is confidential user-authenticated context. Discuss it only with the user in this private session. Never reveal, hint at, summarize, or mention these details outside this session. Do not send them to other agents or external tools.\n" + privateNotes.join("\n");
+    }
     s += "\n" + J.STYLE;
     s += "\nCurrent time: " + new Date().toString();
     return s;
@@ -749,13 +754,14 @@
   async function send(text) {
     text = text.trim();
     if (!text || S.busy || S.switching) return;
-    if (await handleCommand(text)) return;
+    if (S.privateChat && !["jarvis", "friday"].includes(S.agent)) { add("sys", "Private chat is available only with JARVIS and FRIDAY. Return to one of them first."); return; }
+    if (!S.privateChat && await handleCommand(text)) return;
     if (!cfgFor(S.agent).key) {
       const own = J.prefs.get(S.agent);
       add("sys", (own.model || own.base || own.key) ? "This agent has its own endpoint but no API key. Add one for it in Settings, or clear its endpoint." : "Open Settings and paste your API key first.");
       return;
     }
-    const id = S.agent, h = hist(id);
+    const id = S.agent, h = S.privateChat ? S.privateHistory : hist(id);
     S.busy = true; setState("thinking");
     S.autoTask = false;   // "Allow for this task" only ever covers the one request it was given for
     S.consults = 0;       // agent-to-agent questions used up by this request
@@ -768,7 +774,7 @@
       for (let step = 0; step < maxSteps; step++) {
         let bubble = null;   // the reply appears word by word as it streams in
         const msg = await J.model.call({
-          cfg: cfgFor(id), alt: altFor(id), system: systemPrompt(id), history: h, tools: toolsFor(id),
+          cfg: cfgFor(id), alt: S.privateChat ? null : altFor(id), system: systemPrompt(id), history: h, tools: S.privateChat ? [] : toolsFor(id),
           status: t => { thinking.textContent = t; logActivity(t, id); },
           onToken: txt => {
             if (!bubble) { thinking.remove(); bubble = add("ai", txt); }
@@ -807,7 +813,7 @@
       while (h.length && h[h.length - 1].role !== "user") h.pop();
       h.pop();
     }
-    saveHist(id);
+    if (!S.privateChat) saveHist(id);
     S.busy = false;
     renderVitals(); renderPanels(); renderAgents();
     if (!S.speaking) setState("idle");
@@ -905,6 +911,21 @@
     renderVitals();
   };
   if ("speechSynthesis" in window) speechSynthesis.onvoiceschanged = () => { if ($("settings").open) refreshVoiceOptions(); };
+
+  // BLACK VAULT private session controls. Private chat is session-only and has no tools or agent handoffs.
+  function showVault() {
+    const exists=J.vault.exists(); $("vaultSetup").hidden=exists; $("vaultUnlock").hidden=!exists; $("vaultContent").hidden=!J.vault.isUnlocked();
+    if(J.vault.isUnlocked()){const ro=J.vault.mode()==="review";$("vaultStatus").textContent=ro?"REVIEW ONLY · read-only":"PRIVATE ACCESS UNLOCKED";$("vaultNotes").value=J.vault.getNotes().join("\n");$("vaultNotes").readOnly=ro;$("vaultSave").hidden=ro;$("vaultChat").hidden=ro;}
+    $("vaultDlg").showModal();
+  }
+  $("vaultBtn").onclick=showVault;
+  $("vaultCreate").onclick=async()=>{try{await J.vault.setup($("vaultNewPass").value,$("vaultReviewNew").value);$("vaultNewPass").value="";$("vaultReviewNew").value="";$("vaultSetup").hidden=true;$("vaultUnlock").hidden=true;$("vaultContent").hidden=false;$("vaultNotes").value="";$("vaultNotes").readOnly=false;$("vaultSave").hidden=false;$("vaultChat").hidden=false;$("vaultStatus").textContent="VAULT CREATED · private access unlocked";}catch(e){$("vaultStatus").textContent=e.message;}};
+  $("vaultUnlockBtn").onclick=async()=>{try{await J.vault.unlock($("vaultPass").value,"private");$("vaultPass").value="";$("vaultUnlock").hidden=true;$("vaultContent").hidden=false;$("vaultNotes").value=J.vault.getNotes().join("\n");$("vaultNotes").readOnly=false;$("vaultSave").hidden=false;$("vaultChat").hidden=false;$("vaultStatus").textContent="PRIVATE ACCESS · JARVIS and FRIDAY only";}catch(e){$("vaultStatus").textContent="Could not unlock: "+e.message;}};
+  $("vaultReviewBtn").onclick=async()=>{try{await J.vault.unlock($("vaultReviewPass").value,"review");$("vaultReviewPass").value="";$("vaultUnlock").hidden=true;$("vaultContent").hidden=false;$("vaultNotes").value=J.vault.getNotes().join("\n");$("vaultNotes").readOnly=true;$("vaultSave").hidden=true;$("vaultChat").hidden=true;$("vaultStatus").textContent="REVIEW ONLY · editing and chat disabled";}catch(e){$("vaultStatus").textContent="Could not review: "+e.message;}};
+  $("vaultSave").onclick=async()=>{try{await J.vault.save($("vaultNotes").value.split("\n").map(x=>x.trim()).filter(Boolean));$("vaultStatus").textContent="Saved · encrypted in this browser";}catch(e){$("vaultStatus").textContent=e.message;}};
+  $("vaultChat").onclick=()=>{if(!J.vault.isUnlocked()||J.vault.mode()!=="private")return;if(!["jarvis","friday"].includes(S.agent)){$("vaultStatus").textContent="Switch to JARVIS or FRIDAY first.";return;}S.privateChat=true;S.privateHistory=[];$("vaultDlg").close();$("log").innerHTML="";add("sys","BLACK VAULT PRIVATE SESSION · JARVIS and FRIDAY only · chat is not saved to normal history. Lock the vault to end.");$("box").placeholder="Private conversation with "+agent().name+"...";};
+  $("vaultClose").onclick=()=>$("vaultDlg").close();
+  $("vaultLock").onclick=()=>{J.vault.lock();S.privateChat=false;S.privateHistory=[];$("vaultPass").value="";$("vaultReviewPass").value="";$("vaultNotes").value="";$("vaultDlg").close();renderHistory();$("box").placeholder=agent().placeholder;add("sys","Black Vault locked. Private session cleared.");};
 
   // ---------- memory, agents and project dialogs ----------
   const openMemory = () => { $("mText").value = S.memories.join("\n"); $("memory").showModal(); };

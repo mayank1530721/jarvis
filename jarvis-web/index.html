@@ -21,6 +21,7 @@
       <button id="agentsBtn">Agents</button>
       <button id="speakBtn" title="Speak replies aloud">Voice: off</button>
       <button id="memBtn">Memory</button>
+      <button id="vaultBtn">Black Vault</button>
       <button id="setBtn">Settings</button>
     </div>
   </header>
@@ -182,6 +183,13 @@
   <div class="drow"><button id="handsNo" type="button">Decline</button><button id="handsTask" type="button" title="Approve this and the file writes and commands ULTRON needs to finish this one request. Each one is still listed in the chat.">Allow for this task</button><button class="primary" id="handsYes" type="button">Approve</button></div>
 </dialog>
 
+<dialog id="vaultDlg">
+<h3>BLACK VAULT</h3><small>Encrypted private memory. Passwords are never saved; only encrypted data is stored in this browser.</small>
+<div id="vaultStatus" class="vault-status">Create a vault or unlock an existing one.</div>
+<section id="vaultSetup"><label>New vault password</label><input type="password" id="vaultNewPass" autocomplete="new-password" placeholder="Create a new unique passphrase"><label>New review-only password</label><input type="password" id="vaultReviewNew" autocomplete="new-password" placeholder="A different unique passphrase"><button id="vaultCreate" type="button">Create encrypted vault</button></section>
+<section id="vaultUnlock"><label>Vault password · private chat access</label><input type="password" id="vaultPass" autocomplete="current-password" placeholder="Enter vault password"><button id="vaultUnlockBtn" type="button">Unlock private access</button><label>Review password · read-only access</label><input type="password" id="vaultReviewPass" autocomplete="current-password" placeholder="Enter review password"><button id="vaultReviewBtn" type="button">Review saved memories</button></section>
+<section id="vaultContent" hidden><label>Private memories · one item per line</label><textarea id="vaultNotes" style="min-height:170px" placeholder="Saved encrypted in this browser."></textarea><div class="drow"><button id="vaultClose" type="button">Close</button><button id="vaultSave" class="primary" type="button">Save encrypted</button><button id="vaultChat" class="primary" type="button">Enter private chat</button></div></section>
+<div class="drow"><button id="vaultLock" type="button">Lock vault</button></div></dialog>
 <dialog id="memory">
   <h3>What Jarvis remembers</h3>
   <small>Shared by every agent. One fact per line. Say "remember that..." to Jarvis, or edit here.</small>
@@ -208,6 +216,7 @@
 </dialog>
 
 <script src="js/util.js"></script>
+<script src="js/vault.js"></script>
 <script src="js/agents.js"></script>
 <script src="js/intent.js"></script>
 <script src="js/council.js"></script>

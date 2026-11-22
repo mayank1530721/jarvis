@@ -35,6 +35,15 @@ It is a small ecosystem: **JARVIS** is the command centre, and specialist agents
 
 To switch AI provider later, change the model, API base URL and backup models in Settings. If the main model is busy, Jarvis retries, then tries the backup models in order.
 
+## Black Vault (private memory)
+
+- Open **Black Vault** in the JARVIS header and create two new, different passphrases (at least 14 characters each). Do not reuse credentials previously shared in chat.
+- The vault passphrase unlocks private access; the separate review passphrase grants read-only access.
+- Memories are encrypted in this browser with AES-GCM; passphrase-derived wrapping keys use PBKDF2. The app stores ciphertext and salts in this browser's local storage, not in the public GitHub repository.
+- Select **Enter private chat** to start a temporary conversation. Only JARVIS and FRIDAY receive the decrypted vault context. Private chat disables tools and agent handoffs and is not written to normal chat history.
+- Press **Lock vault** to clear the in-memory key and private chat session. Reloading the page also ends the session.
+- Use the app over HTTPS or localhost. This protects stored vault data at rest, but does not protect against malware, malicious browser extensions, XSS, or someone using your unlocked browser. Messages in private chat are still sent to the AI provider configured for that agent; review that provider's privacy policy.
+
 ## Voices
 A web page can only use the voices installed on your computer, so "deep male" is a best effort: Jarvis prefers a British male voice and ULTRON a deeper US male voice, and you can pick any installed voice by hand in Settings. On Windows 11, Edge has the best free voices ("Natural" ones); install more under Settings > Time & language > Speech.
 
