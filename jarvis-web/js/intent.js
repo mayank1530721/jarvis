@@ -8,7 +8,8 @@
   "use strict";
   var J = root.J = root.J || {};
 
-  var NAMES = "jarvis|ultron|friday|dare\\s?devil|vision|council";
+  // "kh?onsh?u" also catches how speech recognition tends to spell him (Konshu, Khonsu). "dare devil" still works as his old name.
+  var NAMES = "jarvis|ultron|friday|kh?onsh?u|dare\\s?devil|vision|council";
   var VERB = "(?:unleash|release|convene|summon|activate|wake(?: up)?|bring(?: up| in| out)?|call(?: in| up| out)?|switch(?: over)? to|go to|" +
     "talk to|speak (?:to|with)|connect me (?:to|with)|put me through to|hand (?:me )?over to|transfer (?:me )?to|open|load|launch|deploy|" +
     "engage|fire up|boot up|start|enable|get me|i want|i need|let me (?:talk|speak) (?:to|with)|take me to|bring me)";
@@ -27,7 +28,10 @@
       .replace(/[.!?,;:…]+/g, " ")
       .replace(/\s+/g, " ").trim();
   }
-  function agentId(raw) { var id = raw.replace(/\s+/g, ""); return id === "council" ? "daredevil" : id; }
+  function agentId(raw) {
+    var id = raw.replace(/\s+/g, "");
+    return (id === "council" || id === "daredevil" || /^kh?onsh?u$/.test(id)) ? "khonshu" : id;
+  }
 
   // ctx = { pending: agent id waiting for confirmation or null, active: agent id on screen }
   J.parseIntent = function (text, ctx) {

@@ -39,7 +39,7 @@ body[data-agent="ultron"][data-state="thinking"]  { --c-rgb: 255, 196, 72; }
 
 /* Reserved for the agents that are planned but not built yet (FRIDAY, VISION). */
 body[data-agent="friday"]    { --base-rgb: 176, 110, 255; --hi-rgb: 214, 180, 255; --panel-rgb: 28, 14, 48; --deep-rgb: 8, 4, 18; --glow-rgb: 54, 22, 98; --glow2-rgb: 60, 26, 108; --bg-0: #05020b; --bg-1: #0d0719; --text: #ebe2f7; --dim: #8b7aa3; --ink: #12061f; --logo-shape: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
-body[data-agent="daredevil"] {
+body[data-agent="khonshu"] {
   --base-rgb: 236, 240, 248; --hi-rgb: 255, 255, 255;
   --panel-rgb: 24, 26, 32; --deep-rgb: 7, 8, 10;
   --glow-rgb: 40, 44, 56; --glow2-rgb: 52, 58, 74;
@@ -47,6 +47,6 @@ body[data-agent="daredevil"] {
   --text: #eef1f7; --dim: #8a90a0; --ink: #0a0b0e;
   --logo-shape: polygon(50% 0, 100% 100%, 0 100%);
 }
-body[data-agent="daredevil"][data-state="listening"] { --c-rgb: 170, 210, 255; }
-body[data-agent="daredevil"][data-state="thinking"]  { --c-rgb: 255, 255, 255; }
+body[data-agent="khonshu"][data-state="listening"] { --c-rgb: 170, 210, 255; }
+body[data-agent="khonshu"][data-state="thinking"]  { --c-rgb: 255, 255, 255; }
 body[data-agent="vision"]    { --base-rgb: 255, 196, 60; --hi-rgb: 255, 226, 150; --panel-rgb: 40, 30, 8;  --deep-rgb: 14, 10, 3;  --glow-rgb: 92, 66, 10; --glow2-rgb: 104, 74, 14; --bg-0: #080602; --bg-1: #151004; --text: #f6ecd6; --dim: #a39066; --ink: #1c1303; --logo-shape: circle(50%); }

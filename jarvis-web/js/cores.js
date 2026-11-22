@@ -127,7 +127,7 @@
     }
   };
 
-  // ---------- DAREDEVIL: three nodes around one table (the three lenses), linked by lines that flare while they argue ----------
+  // ---------- KHONSHU: three nodes around one table (the three lenses), linked by lines that flare while they argue ----------
   var NODE_TINT = [[255, 207, 107], [255, 122, 122], [126, 200, 255]];   // Steven, Marc, Jake: same colours as their chat labels
   var dA = 0, dRing = 0;
   var council = {

@@ -1,4 +1,4 @@
-// Reads DAREDEVIL's replies. The council ends a verdict with labelled lines (VERDICT / CONDITIONS /
+// Reads KHONSHU's replies. The council ends a verdict with labelled lines (VERDICT / CONDITIONS /
 // RISKS / NEXT) and opens with one line per lens (STEVEN / MARC / JAKE). This turns that text into
 // data for the Verdict, Council and Risk register panels. If the model does not follow the format,
 // nothing is parsed and the panels stay empty rather than showing guesses.

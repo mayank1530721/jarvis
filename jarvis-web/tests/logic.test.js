@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const js = f => path.join(__dirname, "..", "js", f);
 
-require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("uplika.js")); require(js("github.js")); require(js("voice.js")); require(js("model.js"));
+require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("uplika.js")); require(js("github.js")); require(js("hands.js")); require(js("voice.js")); require(js("model.js"));
 const J = globalThis.J;
 
 let passed = 0;
@@ -50,7 +50,7 @@ test("summon phrases", () => {
   for (const t of ["Unleash ULTRON.", "unleash ultron", "Release Ultron!", "switch to ultron", "I want to talk to Ultron", "Hey Jarvis, can you summon Ultron please",
     "bring ultron online", "ultron", "Wake up Ultron", "Open Ultron", "let me talk to ultron", "Activate ULTRON now"])
     assert.deepEqual(parse(t), { type: "summon", agent: "ultron" }, t);
-  assert.deepEqual(parse("unleash dare devil"), { type: "summon", agent: "daredevil" });
+  assert.deepEqual(parse("unleash dare devil"), { type: "summon", agent: "khonshu" });
   assert.deepEqual(parse("Switch to FRIDAY"), { type: "summon", agent: "friday" });
 });
 test("ordinary sentences are NOT hijacked", () => {
@@ -74,12 +74,12 @@ test("stand down only works inside another agent", () => {
 });
 
 
-// ---------- DAREDEVIL ----------
+// ---------- KHONSHU ----------
 test("the council can be convened by name or by 'council'", () => {
-  for (const t of ["Convene the council", "unleash daredevil", "summon the council please", "switch to DAREDEVIL", "council"])
-    assert.deepEqual(parse(t), { type: "summon", agent: "daredevil" }, t);
-  assert.deepEqual(parse("unleash dare devil"), { type: "summon", agent: "daredevil" });
-  assert.equal(J.AGENTS.daredevil.status, "online");
+  for (const t of ["Convene the council", "unleash khonshu", "summon the council please", "switch to KHONSHU", "council"])
+    assert.deepEqual(parse(t), { type: "summon", agent: "khonshu" }, t);
+  assert.deepEqual(parse("unleash dare devil"), { type: "summon", agent: "khonshu" });
+  assert.equal(J.AGENTS.khonshu.status, "online");
   assert.equal(parse("what does the council of elrond decide"), null);
 });
 const SAMPLE = `You want to run a free multi-agent product on one laptop.
@@ -136,19 +136,19 @@ test("agent defaults come from the registry; only real changes are stored", () =
   assert.deepEqual(Object.keys(JSON.parse(mem["jarvis.agentprefs"]).ultron), ["voice"]);
 });
 test("a per-agent model, endpoint and key are saved and read back; blanks are not stored", () => {
-  J.prefs.save("daredevil", { persona: "", model: " qwen2.5-coder:32b ", base: "http://localhost:11434/v1", key: "", voice: { voiceURI: "", rate: 1, pitch: 1 } });
-  const p = J.prefs.get("daredevil");
+  J.prefs.save("khonshu", { persona: "", model: " qwen2.5-coder:32b ", base: "http://localhost:11434/v1", key: "", voice: { voiceURI: "", rate: 1, pitch: 1 } });
+  const p = J.prefs.get("khonshu");
   assert.equal(p.model, "qwen2.5-coder:32b"); assert.equal(p.base, "http://localhost:11434/v1"); assert.equal(p.key, "");
-  assert.equal("key" in JSON.parse(mem["jarvis.agentprefs"]).daredevil, false);
+  assert.equal("key" in JSON.parse(mem["jarvis.agentprefs"]).khonshu, false);
   assert.equal(J.prefs.get("jarvis").model, "");
 });
-test("ULTRON and DAREDEVIL prefer different voices when both exist", () => {
+test("ULTRON and KHONSHU prefer different voices when both exist", () => {
   const vs = [
     { name: "Microsoft Guy Online (Natural) - English (United States)", lang: "en-US", voiceURI: "guy" },
     { name: "Microsoft Davis Online (Natural) - English (United States)", lang: "en-US", voiceURI: "davis" }
   ];
   assert.equal(J.voice.pickVoice(vs, "", J.AGENTS.ultron.voice).voiceURI, "guy");
-  assert.equal(J.voice.pickVoice(vs, "", J.AGENTS.daredevil.voice).voiceURI, "davis");
+  assert.equal(J.voice.pickVoice(vs, "", J.AGENTS.khonshu.voice).voiceURI, "davis");
 });
 
 // ---------- code blocks ----------
@@ -177,6 +177,81 @@ function fakeStream(events) {
   return { body: { getReader: () => ({ read: async () => sent ? { done: true } : (sent = true, { done: false, value: enc.encode(text) }) }) } };
 }
 const chunk = delta => ({ choices: [{ delta }] });
+
+
+// ---------- KHONSHU (renamed from DAREDEVIL) ----------
+test("KHONSHU is summoned by name, by how speech recognition spells it, and by his old name", () => {
+  for (const t of ["unleash khonshu", "Unleash Konshu", "summon khonsu", "khonshu", "switch to Khonshu please", "unleash daredevil", "convene the council"])
+    assert.deepEqual(parse(t), { type: "summon", agent: "khonshu" }, t);
+  assert.equal(J.AGENTS.khonshu.name, "KHONSHU");
+  assert.equal(J.AGENTS.daredevil, undefined);
+  assert.ok(J.AGENT_ORDER.includes("khonshu") && !J.AGENT_ORDER.includes("daredevil"));
+});
+test("KHONSHU's personality is conversational, and still ends a ruling in the format the panels read", () => {
+  const p = J.AGENTS.khonshu.persona;
+  assert.match(p, /VERDICT: APPROVED or CONDITIONAL or REJECTED/);
+  assert.match(p, /never restate|Never restate/i);
+  assert.doesNotMatch(p, /Round one|Rebuttal: one short exchange/);
+  const ruling = "Fair enough, I would back it with one condition.\nVERDICT: CONDITIONAL\nCONDITIONS:\n- Test with 5 users first\nRISKS:\n- [HIGH] One laptop | back it up\nNEXT: Ask 5 people to try it.";
+  assert.equal(J.council.parseVerdict(ruling).verdict, "CONDITIONAL");
+  assert.equal(J.council.latest([{ role: "assistant", content: ruling }]).count, 1);
+});
+test("lens lines written as natural dialogue are still picked up for the council panel", () => {
+  const a = J.council.parseAlters("Not yet.\nMarc, flatly: your whole plan runs on one laptop.\nJake cuts in: nobody has asked for this yet.\nSteven: it costs more than you think.");
+  assert.match(a.marc, /one laptop/); assert.match(a.jake, /nobody has asked/); assert.match(a.steven, /costs more/);
+  assert.deepEqual(J.council.parseAlters("Marc said it was fine, and Jake agreed."), {});
+});
+test("a verdict block is not read aloud as labels and symbols, and code is skipped", () => {
+  const spoken = J.speakable("I would do it, with one condition attached.\nVERDICT: CONDITIONAL\nCONDITIONS:\n- Test first\nRISKS:\n- [HIGH] laptop | backup\nNEXT: ask five people");
+  assert.match(spoken, /full verdict is on screen/);
+  assert.doesNotMatch(spoken, /CONDITIONS|RISKS|\[HIGH\]|\|/);
+  assert.match(J.speakable("VERDICT: REJECTED\nNEXT: stop"), /verdict is rejected/);
+  assert.equal(J.speakable("Plain **bold** answer."), "Plain bold answer.");
+  assert.match(J.speakable("Try this:\n```js\nconsole.log(1)\n```\nDone."), /code block/);
+});
+
+// ---------- ULTRON's hands ----------
+test("approval text shows what a file write will change", () => {
+  assert.match(J.hands.describeWrite("a.py", null, "x = 1\ny = 2"), /^NEW FILE {2}a\.py\n2 lines/);
+  const edit = J.hands.describeWrite("a.py", "x = 1\ny = 2\nz = 3", "x = 1\ny = 20\nz = 3");
+  assert.match(edit, /^EDIT {2}a\.py\n1 line\(s\) removed, 1 added, starting at line 2/);
+  assert.match(edit, /- y = 2\n\+ y = 20/);
+  assert.match(J.hands.describeWrite("a.py", "same", "same"), /NO CHANGE/);
+  const lines100 = Array.from({ length: 100 }, (_, i) => "l" + i).join("\n");
+  assert.match(J.hands.describeWrite("a.py", null, lines100), /60 more lines/);                 // a new file
+  assert.match(J.hands.describeWrite("a.py", "", lines100), /^EDIT .*\n.*\n\n[^]*61 more changed lines/);   // an existing empty file is an edit
+});
+test("the command approval box shows the command, folder and timeout", () => {
+  const d = J.hands.describeRun("npm test", "app", 90);
+  assert.match(d, /npm test/); assert.match(d, /workspace\/app/); assert.match(d, /90 seconds/);
+  assert.match(J.hands.describeRun("dir", "", undefined), /the workspace folder/);
+});
+test("command results tell the model plainly whether it worked", () => {
+  assert.match(J.hands.formatRun({ exit_code: 0, seconds: 1.2, output: "ok" }), /success\)\.\nok/);
+  assert.match(J.hands.formatRun({ exit_code: 2, seconds: 0.5, output: "Error: x" }), /failed\)\.\nError: x/);
+  assert.match(J.hands.formatRun({ exit_code: null, timed_out: true, seconds: 60, output: "" }), /timed out after 60s/);
+  assert.match(J.hands.formatRun({ exit_code: 0, seconds: 0, output: "" }), /\[no output\]/);
+});
+test("long file text and old tool output are cut so the model's context does not overflow", () => {
+  const long = "a".repeat(30000), cut = J.hands.forModel(long, "file");
+  assert.ok(cut.length < 24200); assert.match(cut, /file cut: showing the first 24000 of 30000/);
+  assert.equal(J.hands.forModel("short"), "short");
+  const msgs = [{ role: "user", content: "go" }];
+  for (let i = 0; i < 10; i++) { msgs.push({ role: "assistant", content: null, tool_calls: [{ id: "c" + i }] }); msgs.push({ role: "tool", tool_call_id: "c" + i, content: "x".repeat(5000) }); }
+  const out = J.model.compactToolResults(msgs, 6, 2000), tools = out.filter(m => m.role === "tool");
+  assert.equal(tools.length, 10);
+  assert.ok(tools.slice(0, 4).every(m => m.content.length < 2200 && /shortened/.test(m.content)));
+  assert.ok(tools.slice(4).every(m => m.content.length === 5000));
+  assert.equal(msgs[2].content.length, 5000, "the original history is not changed");
+});
+test("a long run of tool calls never produces an empty transcript or loses the task", () => {
+  const h = [{ role: "user", content: "old question" }, { role: "assistant", content: "old answer" }, { role: "user", content: "build it" }];
+  for (let i = 0; i < 25; i++) { h.push({ role: "assistant", content: null, tool_calls: [{ id: "c" + i }] }); h.push({ role: "tool", tool_call_id: "c" + i, content: "r" + i }); }
+  const r = J.model.recentHistory(h, 30);
+  assert.ok(r.length > 0);
+  assert.equal(r[0].role, "user"); assert.equal(r[0].content, "build it");
+  assert.equal(J.model.recentHistory([{ role: "assistant", content: "hi" }], 30).length, 1);
+});
 
 (async () => {
   await testAsync("plain text streams in", async () => {

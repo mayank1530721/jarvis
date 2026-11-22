@@ -54,6 +54,20 @@
   var synth = root.speechSynthesis;
   var current = null;
 
+  // What is actually read aloud. Code is not read out, and a council verdict block (VERDICT / CONDITIONS /
+  // RISKS / NEXT) is shown on screen instead of being read as labels and symbols, which sounds like a script.
+  var VERDICT_BLOCK = /^[ \t>*_#-]*VERDICT[ \t*_]*:[ \t*_]*(APPROVED|CONDITIONAL|REJECTED)\b/im;
+  function speakable(text) {
+    var t = String(text == null ? "" : text).replace(/```[\s\S]*?```/g, " code block. ");
+    var m = VERDICT_BLOCK.exec(t);
+    if (m) {
+      var before = t.slice(0, m.index).replace(/[*_`#>\s]+/g, " ").trim();
+      t = before.length > 20 ? before + " The full verdict is on screen." : "My verdict is " + m[1].toLowerCase() + ". The conditions and risks are on screen.";
+    }
+    return t.replace(/[*_`#>]/g, "").replace(/\s{2,}/g, " ").trim();
+  }
+  J.speakable = speakable;
+
   J.voices = function () { return synth ? synth.getVoices() : []; };
 
   J.stopSpeaking = function () {
@@ -69,7 +83,7 @@
   J.speak = function (text, agentId, hooks, maxMs, override) {
     hooks = hooks || {};
     if (!synth) return Promise.resolve();
-    var clean = String(text).replace(/```[\s\S]*?```/g, " code block. ").replace(/[*_`#>]/g, "").replace(/\s{2,}/g, " ").trim();
+    var clean = speakable(text);
     if (!clean) return Promise.resolve();
     synth.cancel();
     var agent = J.AGENTS[agentId], prefs = override ? { voice: override } : J.prefs.get(agentId);

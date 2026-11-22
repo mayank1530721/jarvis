@@ -45,6 +45,17 @@
     const oldHist = store.get("jarvis.history", null);
     if (oldHist && store.get("jarvis.history.jarvis", null) === null) store.set("jarvis.history.jarvis", oldHist);
     if (oldHist) store.remove("jarvis.history");
+    // DAREDEVIL was renamed KHONSHU: carry over his chat and his model/voice settings. His saved personality is left
+    // behind on purpose, so he picks up the new conversational default instead of the old scripted one.
+    const ddHist = store.get("jarvis.history.daredevil", null);
+    if (ddHist && store.get("jarvis.history.khonshu", null) === null) store.set("jarvis.history.khonshu", ddHist);
+    if (ddHist) store.remove("jarvis.history.daredevil");
+    const allPrefs = store.get("jarvis.agentprefs", null);
+    if (allPrefs && allPrefs.daredevil) {
+      if (!allPrefs.khonshu) { const old = { ...allPrefs.daredevil }; delete old.persona; allPrefs.khonshu = old; }
+      delete allPrefs.daredevil;
+      store.set("jarvis.agentprefs", allPrefs);
+    }
   })();
 
   // ---------- state ----------
@@ -127,7 +138,7 @@
       else if (m.role === "assistant" && m.content) add("ai", m.content);
     }
     if (!hist().length) add("sys", cfg().key
-      ? "Jarvis online. Say \"Unleash ULTRON\" for engineering, or \"Convene the council\" for a hard look at a plan."
+      ? "Jarvis online. Say \"Unleash ULTRON\" for engineering, or \"Unleash Khonshu\" for a hard look at a plan."
       : "Jarvis online. Open Settings and paste your API key to chat. You can already say \"Unleash ULTRON\".");
   }
 
@@ -159,11 +170,11 @@
       ["Voice out", S.speakOn ? "On" : "Off", S.speakOn ? "ok" : ""],
       ["Messages", String(userCount("ultron"))], ["Project", proj ? proj.name : "None", proj ? "ok" : ""]
     ]);
-    const dd = J.council.latest(hist("daredevil"));
+    const dd = J.council.latest(hist("khonshu"));
     fillRows($("vitalsD"), [
-      ["Agent", "DAREDEVIL"], ["Brain", cfgFor("daredevil").model], ["Link", link[0], link[1]],
+      ["Agent", "KHONSHU"], ["Brain", cfgFor("khonshu").model], ["Link", link[0], link[1]],
       ["Voice out", S.speakOn ? "On" : "Off", S.speakOn ? "ok" : ""],
-      ["Messages", String(userCount("daredevil"))], ["Verdicts", String(dd.count)]
+      ["Messages", String(userCount("khonshu"))], ["Verdicts", String(dd.count)]
     ]);
     $("hudLink").textContent = l.warn ? l.text : "KEY SET";
     $("hudModel").textContent = c.model.length > 18 ? c.model.slice(0, 17) + "…" : c.model;
@@ -252,9 +263,9 @@
     ["marc", "MARC", "The mercenary", "feasibility, what breaks first", "#ff7a7a"],
     ["jake", "JAKE", "The realist", "market, adoption, will anyone care", "#7ec8ff"]
   ];
-  // DAREDEVIL's panels, read straight from the council's own replies; empty when the format was not followed.
+  // KHONSHU's panels, read straight from the council's own replies; empty when the format was not followed.
   function renderCouncil() {
-    const L = J.council.latest(hist("daredevil")), v = L.verdict;
+    const L = J.council.latest(hist("khonshu")), v = L.verdict;
     const box = $("councilList"); box.innerHTML = "";
     for (const [key, name, role, lens, color] of LENSES) {
       const r = el("div", "alter-row"), n = el("div", "alter-name", name); n.style.color = color;
@@ -262,7 +273,7 @@
       box.append(r);
     }
     const vb = $("verdictBox"); vb.innerHTML = "";
-    if (!v) vb.append(el("div", "empty", "No verdict yet. Put a plan to the council."));
+    if (!v) vb.append(el("div", "empty", "No verdict yet. Ask Khonshu for a ruling when you are ready."));
     else {
       vb.append(el("div", "vbadge " + v.verdict.toLowerCase(), v.verdict));
       if (v.conditions.length) { vb.append(el("div", "vsub", "Conditions")); v.conditions.forEach(c => vb.append(el("div", "vtext", "\u2022 " + c))); }
@@ -405,7 +416,48 @@
           files: { type: "array", items: { type: "object", properties: { path: { type: "string" }, content: { type: "string", description: "Full new file content." } }, required: ["path", "content"] } },
           pr_title: { type: "string" }, pr_body: { type: "string", description: "What changed and why." } }, required: ["repo", "message", "files"] } } }
   ];
-  const toolsFor = id => TOOLS.concat((id === "jarvis" && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "ultron" && ghToken()) ? GH_TOOLS : []);
+  // Desktop agent (hands). Only ULTRON has it, once its token is saved. Looking is free; writing a file or running a command needs approval.
+  const handsToken = () => String(store.get("jarvis.agentToken", "") || "");
+  const handsBase = () => String(store.get("jarvis.agentBase", "") || "") || J.hands.DEFAULT_BASE;
+  const HANDS_TOOLS = [
+    { type: "function", function: { name: "fs_list", description: "List a folder inside the user's workspace folder on their computer. Paths are relative to the workspace; use an empty path for its root.",
+        parameters: { type: "object", properties: { path: { type: "string", description: "Folder path relative to the workspace. Empty for the root." } } } } },
+    { type: "function", function: { name: "fs_read", description: "Read a text file in the workspace. Read a file before you change it.",
+        parameters: { type: "object", properties: { path: { type: "string", description: "File path relative to the workspace." } }, required: ["path"] } } },
+    { type: "function", function: { name: "fs_write", description: "Create or replace a file in the workspace with the COMPLETE new content (not a patch). The user sees what changes and must approve. Parent folders are created for you.",
+        parameters: { type: "object", properties: { path: { type: "string", description: "File path relative to the workspace." }, content: { type: "string", description: "The full new file content." } }, required: ["path", "content"] } } },
+    { type: "function", function: { name: "run_command", description: "Run a shell command on the user's computer, starting in the workspace (or a folder inside it). Use it to run code, tests, installs and builds, then read the output. The user must approve it. It cannot take keyboard input, and it is stopped after the timeout.",
+        parameters: { type: "object", properties: { command: { type: "string" }, cwd: { type: "string", description: "Folder inside the workspace to start in. Empty for the workspace root." }, timeout_seconds: { type: "number", description: "Default 60, at most 600." } }, required: ["command"] } } }
+  ];
+  // Agents talking to each other: any online agent can ask another online agent for their view. The other agent
+  // answers in its own voice from its own specialty, with no tools and no further consulting, so it cannot loop.
+  const MAX_CONSULTS = 3;   // per user request; each one is an extra model call, and free tiers have rate limits
+  const consultTargets = id => J.AGENT_ORDER.filter(x => x !== id && agent(x).status === "online");
+  const consultTool = id => ({ type: "function", function: { name: "consult_agent",
+    description: "Ask another available agent for their view and wait for the answer. Use it when their specialty would really improve your answer, for example the engineer asks the strategy council to challenge a design, or the strategy council asks the engineer whether something is feasible. Include in your question the facts and any other agent's points they need, because they do not see this conversation. You may consult up to " + MAX_CONSULTS + " times per request; then give the user your own conclusion. The user sees the exchange.",
+    parameters: { type: "object", properties: {
+      agent: { type: "string", enum: consultTargets(id).map(x => x), description: "Which agent to ask (lowercase id)." },
+      question: { type: "string", description: "What you want their view on, self-contained." } }, required: ["agent", "question"] } } });
+  const toolsFor = id => TOOLS.concat((id === "jarvis" && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "ultron" && ghToken()) ? GH_TOOLS : [], (id === "ultron" && handsToken()) ? HANDS_TOOLS : [],
+    consultTargets(id).length ? [consultTool(id)] : []);
+  // Ask before a file write or command. "Allow for this task" approves the rest of this one request (S.autoTask).
+  function askHands(title, summary) {
+    return new Promise(resolve => {
+      const dlg = $("handsDlg"); $("handsTitle").textContent = title; $("handsSummary").textContent = summary;
+      let done = false;
+      const end = v => { if (done) return; done = true; $("handsYes").onclick = $("handsNo").onclick = $("handsTask").onclick = null; dlg.removeEventListener("close", onClose); if (dlg.open) dlg.close(); resolve(v); };
+      const onClose = () => end("no");
+      dlg.addEventListener("close", onClose);
+      $("handsYes").onclick = () => end("yes"); $("handsNo").onclick = () => end("no"); $("handsTask").onclick = () => end("task");
+      dlg.showModal();
+    });
+  }
+  async function approveHands(title, summary, activityText) {
+    if (S.autoTask) { add("sys", "Auto-approved for this task: " + activityText); return true; }
+    const a = await askHands(title, summary);
+    if (a === "task") { S.autoTask = true; return true; }
+    return a === "yes";
+  }
   function askChange(summary) {
     return new Promise(resolve => {
       const dlg = $("ghDlg"); $("ghSummary").textContent = summary;
@@ -446,6 +498,48 @@
       logActivity("Opened " + (r.pr ? "pull request" : "branch") + " on " + p.owner + "/" + p.repo, S.agent);
       return "Done. " + (r.pr ? "Pull request opened: " : "Branch created: ") + r.url + " (" + r.files + " file(s) on branch " + r.branch + "). The default branch was not changed; the user must review and merge it.";
     },
+    fs_list: async ({ path }) => {
+      const r = await J.hands.list(handsBase(), handsToken(), path || "");
+      logActivity("Listed " + (path || "workspace"), S.agent);
+      return r.entries.length ? r.entries.map(e => (e.type === "dir" ? "[dir]  " : "[file] ") + e.name + (e.size != null ? " (" + e.size + " bytes)" : "")).join("\n") + (r.truncated ? "\n[list cut at " + r.entries.length + " entries]" : "") : "The folder is empty.";
+    },
+    fs_read: async ({ path }) => {
+      const r = await J.hands.read(handsBase(), handsToken(), path);
+      logActivity("Read " + path, S.agent);
+      return J.hands.forModel(r.content, "file") + (r.truncated ? "\n[file is " + r.size + " bytes; only the first part was read]" : "");
+    },
+    fs_write: async ({ path, content }) => {
+      if (!path || typeof content !== "string") return "A path and the full file content are both required.";
+      const before = await J.hands.readOrNull(handsBase(), handsToken(), path);
+      if (before === content) return "No change: that file already has exactly this content.";
+      if (!(await approveHands("Approve this file change?", J.hands.describeWrite(path, before, content), "write " + path))) { logActivity("File change declined", S.agent); return "The user declined, so the file was not changed."; }
+      const r = await J.hands.write(handsBase(), handsToken(), path, content);
+      logActivity((r.created ? "Created " : "Updated ") + path, S.agent);
+      return (r.created ? "Created " : "Updated ") + path + " (" + r.bytes + " bytes).";
+    },
+    run_command: async ({ command, cwd, timeout_seconds }) => {
+      if (!command || !String(command).trim()) return "No command was given.";
+      const secs = Math.max(1, Math.min(Number(timeout_seconds) || 60, 600));
+      if (!(await approveHands("Approve this command?", J.hands.describeRun(command, cwd, secs), "run " + command))) { logActivity("Command declined", S.agent); return "The user declined, so the command was not run."; }
+      logActivity("Running: " + command, S.agent);
+      const r = await J.hands.run(handsBase(), handsToken(), command, cwd || "", secs);
+      return J.hands.formatRun(r);
+    },
+    consult_agent: async ({ agent: to, question }) => {
+      const from = S.agent, tid = String(to || "").toLowerCase().replace(/\s+/g, ""), target = J.AGENTS[tid];
+      const options = consultTargets(from).map(x => x).join(", ");
+      if (!target || target.status !== "online" || tid === from) return "That agent is not available to consult. Available: " + (options || "none") + ".";
+      if (!String(question || "").trim()) return "No question was given.";
+      if (S.consults >= MAX_CONSULTS) return "Consult limit reached for this request. Give the user your own conclusion now, using what you already have.";
+      if (!cfgFor(tid).key) return target.name + " has no API key set up yet, so they cannot be consulted.";
+      S.consults++;
+      add("sys", agent(from).name + " asks " + target.name + ": " + question);
+      logActivity(agent(from).name + " consulted " + target.name, from);
+      const msg = await J.model.call({ cfg: cfgFor(tid), system: consultPrompt(tid, from), history: [{ role: "user", content: String(question) }], tools: [], status: () => {} });
+      const reply = String(msg.content || "").trim() || "(no answer)";
+      add("sys", target.name + " answers: " + reply);
+      return target.name + " answered:\n" + reply;
+    },
     uplika_accounts: async () => {
       const all = await J.uplika.accounts(uplikaKey());
       return all.length ? all.map(a => a.platform + " " + a.handle + " [" + a.status + (a.health && a.health !== "ok" ? ", " + a.health : "") + "] id=" + a.id).join("\n") : "No channels are connected yet. Connect them at https://uplika.com/dashboard/connections.";
@@ -483,13 +577,24 @@
   };
 
   // ---------- what each agent is told ----------
+  // The prompt for an agent that is being consulted by another agent: its own personality, but no tools.
+  function consultPrompt(id, fromId) {
+    const c = cfg();
+    let s = J.prefs.get(id).persona;
+    s += "\nYou are being consulted by " + agent(fromId).name + ", another agent in the same ecosystem, on behalf of the user. Answer in your own voice and from your own specialty, in plain text and under 120 words. Be direct, and disagree if you disagree. You cannot use tools or consult anyone else here. Do not write a formal verdict block.";
+    if (c.name) s += "\nThe user's name is " + c.name + ".";
+    if (S.memories.length) s += "\nThings you remember about the user:\n- " + S.memories.join("\n- ");
+    return s;
+  }
   function systemPrompt(id) {
     const c = cfg();
     let s = J.prefs.get(id).persona;
     if (id === "jarvis") s += J.ecosystemPrompt();
     if (id === "jarvis" && uplikaKey()) s += "\nYou are connected to the user's social channels through Uplika (tools uplika_accounts and uplika_publish). Posting always needs the user's approval in a dialog, so never say something is posted until the tool result says it was submitted.";
     if (c.name) s += "\nThe user's name is " + c.name + ".";
+    if (consultTargets(id).length) s += "\nYou can consult other available agents (" + consultTargets(id).map(x => agent(x).name).join(", ") + ") with the consult_agent tool when their specialty would really improve your answer or when the user asks you to get their view. They do not see this conversation, so put the facts and any other agent's points into the question. If you want two agents to react to each other, consult the first, then pass their answer to the second. Never claim an agent said something unless the tool result says so, and give the user your own conclusion at the end.";
     if (id === "ultron" && ghToken()) s += "\nYou are connected to the user's GitHub. Your earlier limits on touching files are lifted for GitHub: use github_repos and github_read to look at their code, then github_propose_change to suggest edits. Read the relevant files first, make small focused changes with complete file contents, and never invent file contents you have not read. Every change needs the user's approval and arrives as a pull request on a new branch; you cannot merge or change the default branch. Never say a change was made until the tool result says it was.";
+    if (id === "ultron" && handsToken()) s += "\nYou have hands: a desktop agent on the user's computer. Your earlier limits on running code and touching files are lifted for it. Tools: fs_list and fs_read (free, inside their workspace folder), fs_write (complete file content, needs their approval) and run_command (needs their approval). Work like a senior engineer: look before you change anything, read the files you will touch, make small focused changes, then RUN the code or the tests and read the real output. If something fails, read the error, fix the cause, and run it again; keep going until it works or you are genuinely stuck, then say exactly what is blocking you. Never claim something works unless a command output showed it. Never say a file was written until the tool result says so. Commands cannot take keyboard input and are stopped after their timeout, so use non-interactive flags. If the user declines an action, do not retry the same action; ask what they want instead. Windows is the likely system, so check before assuming Unix commands. Keep your final message short: what you did, what you ran, what the result was.";
     if (id === "ultron") {
       const p = activeProject();
       if (p) s += "\nActive project: " + p.name + (p.notes ? "\nProject notes from the user:\n" + p.notes : "");
@@ -619,12 +724,15 @@
     }
     const id = S.agent, h = hist(id);
     S.busy = true; setState("thinking");
+    S.autoTask = false;   // "Allow for this task" only ever covers the one request it was given for
+    S.consults = 0;       // agent-to-agent questions used up by this request
     add("me", text); h.push({ role: "user", content: text });
     renderVitals();
     const thinking = add("sys", "...");
+    const maxSteps = (id === "ultron" && handsToken()) ? 30 : 8;   // a build-test-fix loop needs more rounds than a chat
     try {
       let finished = false;
-      for (let step = 0; step < 8; step++) {
+      for (let step = 0; step < maxSteps; step++) {
         let bubble = null;   // the reply appears word by word as it streams in
         const msg = await J.model.call({
           cfg: cfgFor(id), system: systemPrompt(id), history: h, tools: toolsFor(id),
@@ -654,7 +762,7 @@
       }
       if (!finished) {
         thinking.remove();
-        const note = "I ran out of steps on that one. Try asking again, a bit more simply.";
+        const note = maxSteps > 8 ? "I've hit my step limit for one request. Everything so far is saved in the workspace; say 'continue' and I'll pick up from here." : "I ran out of steps on that one. Try asking again, a bit more simply.";
         add("ai", note); h.push({ role: "assistant", content: note });
       }
     } catch (e) {
@@ -708,7 +816,7 @@
   }
   $("setBtn").onclick = () => {
     const c = cfg();
-    $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey(); $("sGithub").value = ghToken(); $("sRelay").value = J.uplika.relay;
+    $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey(); $("sGithub").value = ghToken(); $("sAgentToken").value = handsToken(); $("sAgentBase").value = String(store.get("jarvis.agentBase", "") || ""); $("sRelay").value = J.uplika.relay;
     draft = {}; draftAgent = agent().status === "online" ? S.agent : "jarvis";
     for (const id of onlineAgents()) { const p = J.prefs.get(id); draft[id] = { model: p.model, base: p.base, key: p.key, persona: p.persona, voiceURI: p.voice.voiceURI, rate: p.voice.rate, pitch: p.voice.pitch }; }
     const pick = $("sAgentPick"); pick.innerHTML = "";
@@ -738,6 +846,8 @@
   $("sSave").onclick = () => {
     store.set("jarvis.uplika", $("sUplika").value.trim());
     store.set("jarvis.github", $("sGithub").value.trim());
+    store.set("jarvis.agentToken", $("sAgentToken").value.trim());
+    store.set("jarvis.agentBase", $("sAgentBase").value.trim());
     J.uplika.relay = $("sRelay").value.trim(); store.set("jarvis.uplikaRelay", J.uplika.relay);
     store.set("jarvis.cfg", {
       key: $("sKey").value.trim(), model: $("sModel").value.trim() || DEFAULTS.model,

@@ -105,7 +105,28 @@
     limit = limit || 30;
     var start = Math.max(0, history.length - limit);
     while (start < history.length && history[start] && history[start].role !== "user") start++;
+    // A long run of tool calls (a build-test-fix loop) can have no user message after the cut. Never send
+    // an empty transcript or lose the task itself: step back to the user message that started this run.
+    if (start >= history.length) {
+      for (var j = history.length - 1; j >= 0; j--) { if (history[j] && history[j].role === "user") { start = j; break; } }
+      if (start >= history.length) start = 0;
+    }
     return history.slice(start);
+  }
+
+  // In a long build-test-fix loop old command output and file text pile up and would overflow the model's
+  // context. Keep the newest tool results whole and shorten the older ones. Returns a new array.
+  function compactToolResults(messages, keep, max) {
+    keep = keep === undefined ? 6 : keep; max = max || 2000;
+    var seen = 0, out = messages.slice();
+    for (var i = out.length - 1; i >= 0; i--) {
+      if (!out[i] || out[i].role !== "tool") continue;
+      seen++;
+      var text = String(out[i].content == null ? "" : out[i].content);
+      if (seen > keep && text.length > max)
+        out[i] = Object.assign({}, out[i], { content: text.slice(0, max) + "\n[older result shortened: " + (text.length - max) + " more characters omitted]" });
+    }
+    return out;
   }
 
   // opts: { cfg, system, history, tools, status(text), onToken(text) }
@@ -113,7 +134,7 @@
     var c = opts.cfg;
     var models = [c.model].concat(String(c.fallbacks || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean))
       .filter(function (m, i, a) { return m && a.indexOf(m) === i; });
-    var messages = [{ role: "system", content: opts.system }].concat(recentHistory(opts.history, 30));
+    var messages = [{ role: "system", content: opts.system }].concat(compactToolResults(recentHistory(opts.history, 30)));
     var lastErr, stream = true;
     for (var i = 0; i < models.length; i++) {
       for (var attempt = 0; attempt < 2; attempt++) {
@@ -133,6 +154,6 @@
     throw lastErr;
   }
 
-  J.model = { call: call, readStream: readStream, recentHistory: recentHistory };
+  J.model = { call: call, readStream: readStream, recentHistory: recentHistory, compactToolResults: compactToolResults };
   if (typeof module !== "undefined" && module.exports) module.exports = J;
 })(typeof window !== "undefined" ? window : globalThis);

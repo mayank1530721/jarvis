@@ -48,12 +48,12 @@
     <section class="panel grow"><div class="ph">Activity</div><div class="rows" data-render="activity"></div></section>
   </aside>
 
-  <!-- DAREDEVIL workspace: the council room -->
-  <aside class="col left" data-only="daredevil">
+  <!-- KHONSHU workspace: the council room -->
+  <aside class="col left" data-only="khonshu">
     <section class="panel"><div class="ph">Session</div><div id="vitalsD"></div></section>
     <section class="panel grow"><div class="ph">The council</div><div class="rows" id="councilList"></div></section>
   </aside>
-  <aside class="col right" data-only="daredevil">
+  <aside class="col right" data-only="khonshu">
     <section class="panel"><div class="ph">Verdict</div><div id="verdictBox"></div></section>
     <section class="panel grow"><div class="ph">Risk register</div><div class="rows" id="riskList"></div></section>
   </aside>
@@ -99,6 +99,10 @@
   <input type="password" id="sUplika" placeholder="from uplika.com dashboard, API Keys">
   <label>GitHub token (optional, lets ULTRON read your repos and propose changes as pull requests)</label>
   <input type="password" id="sGithub" placeholder="github_pat_... (fine-grained, only the repos you choose)">
+  <label>Desktop agent token (optional, lets ULTRON read and write files in your workspace folder and run commands you approve; start desktop-agent/agent.py and paste the token it prints)</label>
+  <input type="password" id="sAgentToken" placeholder="printed by agent.py each time it starts">
+  <label>Desktop agent address</label>
+  <input type="text" id="sAgentBase" placeholder="http://127.0.0.1:8765">
   <label>Uplika relay address (only if the browser blocks Uplika; see uplika-relay/)</label>
   <input type="text" id="sRelay" placeholder="https://your-relay.workers.dev">
   <label>Your name</label>
@@ -142,6 +146,13 @@
   <div class="drow"><button id="ghNo" type="button">Cancel</button><button class="primary" id="ghYes" type="button">Create branch + PR</button></div>
 </dialog>
 
+<dialog id="handsDlg">
+  <h3 id="handsTitle">Approve this action?</h3>
+  <small>ULTRON asks the desktop agent on this computer. Files stay inside your workspace folder; commands run with your normal permissions.</small>
+  <pre id="handsSummary" style="white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto;font:12px/1.5 var(--mono);margin:10px 0"></pre>
+  <div class="drow"><button id="handsNo" type="button">Decline</button><button id="handsTask" type="button" title="Approve this and the file writes and commands ULTRON needs to finish this one request. Each one is still listed in the chat.">Allow for this task</button><button class="primary" id="handsYes" type="button">Approve</button></div>
+</dialog>
+
 <dialog id="memory">
   <h3>What Jarvis remembers</h3>
   <small>Shared by every agent. One fact per line. Say "remember that..." to Jarvis, or edit here.</small>
@@ -173,6 +184,7 @@
 <script src="js/council.js"></script>
 <script src="js/uplika.js"></script>
 <script src="js/github.js"></script>
+<script src="js/hands.js"></script>
 <script src="js/voice.js"></script>
 <script src="js/model.js"></script>
 <script src="js/cores.js"></script>
