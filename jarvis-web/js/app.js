@@ -708,6 +708,7 @@
     $("sPersonaLabel").textContent = a.name + " personality";
     $("sVoiceHeading").textContent = a.name + " VOICE";
     $("aProvider").value = d.provider || "shared";
+    $("aProvider").disabled = !["jarvis", "ultron"].includes(draftAgent);
     $("aModel").value = d.model; $("aBase").value = d.base; $("aKey").value = d.key;
     const usingGroq = $("aProvider").value === "groq";
     $("aModel").placeholder = usingGroq ? "e.g. llama-3.3-70b-versatile" : "e.g. qwen2.5-coder:32b";
