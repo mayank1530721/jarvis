@@ -5,6 +5,12 @@
   "use strict";
   var J = root.J = root.J || {};
   var BASE = "https://api.uplika.com/v1";
+  // If the browser blocks calls straight to Uplika, the user can point this at their own relay (uplika-relay/worker.js).
+  function base() {
+    var r = J.uplika && J.uplika.relay ? String(J.uplika.relay).trim().replace(/\/+$/, "") : "";
+    if (!r) return BASE;
+    return /\/v1$/.test(r) ? r : r + "/v1";
+  }
 
   function list(body) {
     if (Array.isArray(body)) return body;
@@ -30,13 +36,13 @@
     if (!key) throw new Error("No Uplika API key. Add one in Settings.");
     var res;
     try {
-      res = await fetch(BASE + path, {
+      res = await fetch(base() + path, {
         method: method,
         headers: Object.assign({ authorization: "Bearer " + key }, payload ? { "content-type": "application/json" } : {}),
         body: payload ? JSON.stringify(payload) : undefined
       });
     } catch (e) {
-      throw new Error("Could not reach Uplika from the browser. This is usually a CORS block or no internet. " + e.message);
+      throw new Error(J.uplika.relay ? "Could not reach your Uplika relay. Check the relay address in Settings. " + e.message : "The browser blocked the call to Uplika (CORS) or you are offline. Set up the free relay in uplika-relay/ and paste its address in Settings. " + e.message);
     }
     var body = null; try { body = await res.json(); } catch (e) { /* empty or non-JSON body */ }
     if (!res.ok) throw new Error(explain(res.status, body));
@@ -54,6 +60,6 @@
     return active.filter(function (a) { return w.indexOf(a.id.toLowerCase()) >= 0 || w.indexOf(a.platform.toLowerCase()) >= 0 || w.indexOf(a.handle.toLowerCase().replace(/^@/, "")) >= 0; });
   }
 
-  J.uplika = { BASE: BASE, normalizeAccounts: normalizeAccounts, explain: explain, resolve: resolve, accounts: accounts, publish: publish };
+  J.uplika = { BASE: BASE, relay: "", base: base, normalizeAccounts: normalizeAccounts, explain: explain, resolve: resolve, accounts: accounts, publish: publish };
   if (typeof module !== "undefined" && module.exports) module.exports = J;
 })(typeof window !== "undefined" ? window : globalThis);

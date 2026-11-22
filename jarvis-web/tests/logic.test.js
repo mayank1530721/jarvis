@@ -239,6 +239,11 @@ const chunk = delta => ({ choices: [{ delta }] });
     await J.uplika.accounts("K123");
     assert.equal(seen.u, "https://api.uplika.com/v1/accounts"); assert.equal(seen.o.headers.authorization, "Bearer K123");
   });
+  await testAsync("uplika uses the relay when one is set, adding /v1", async () => {
+    let u; globalThis.fetch = async x => { u = x; return { ok: true, json: async () => ({ data: [] }) }; };
+    J.uplika.relay = "https://r.example.workers.dev/"; await J.uplika.accounts("K");
+    assert.equal(u, "https://r.example.workers.dev/v1/accounts"); J.uplika.relay = "";
+  });
   await testAsync("uplika without a key refuses to call", async () => { await assert.rejects(J.uplika.accounts(""), /No Uplika API key/); });
   await testAsync("uplika reports a blocked browser call plainly", async () => {
     globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };

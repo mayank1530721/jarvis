@@ -387,6 +387,7 @@
   ];
   // Uplika (social posting). Only JARVIS has it for now, only once a key is saved, and every post needs the user's approval.
   const uplikaKey = () => String(store.get("jarvis.uplika", "") || "");
+  J.uplika.relay = String(store.get("jarvis.uplikaRelay", "") || "");
   const UPLIKA_TOOLS = [
     { type: "function", function: { name: "uplika_accounts", description: "List the user's connected social channels (id, platform, handle, status) from Uplika." } },
     { type: "function", function: { name: "uplika_publish", description: "Draft a social post. The user is shown the text and channels and must approve before anything is posted, so call this only when they asked to post something. Do not claim it was posted unless the result says it was.",
@@ -667,7 +668,7 @@
   }
   $("setBtn").onclick = () => {
     const c = cfg();
-    $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey();
+    $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey(); $("sRelay").value = J.uplika.relay;
     draft = {}; draftAgent = agent().status === "online" ? S.agent : "jarvis";
     for (const id of onlineAgents()) { const p = J.prefs.get(id); draft[id] = { model: p.model, base: p.base, key: p.key, persona: p.persona, voiceURI: p.voice.voiceURI, rate: p.voice.rate, pitch: p.voice.pitch }; }
     const pick = $("sAgentPick"); pick.innerHTML = "";
@@ -696,6 +697,7 @@
   };
   $("sSave").onclick = () => {
     store.set("jarvis.uplika", $("sUplika").value.trim());
+    J.uplika.relay = $("sRelay").value.trim(); store.set("jarvis.uplikaRelay", J.uplika.relay);
     store.set("jarvis.cfg", {
       key: $("sKey").value.trim(), model: $("sModel").value.trim() || DEFAULTS.model,
       base: $("sBase").value.trim() || DEFAULTS.base, fallbacks: $("sFallbacks").value.trim(), name: $("sName").value.trim()
