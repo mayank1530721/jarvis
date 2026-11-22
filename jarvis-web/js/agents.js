@@ -21,6 +21,11 @@
     "Unless a tool message below says you have hands, you cannot run code or touch the user's files; then you can only advise and write code for them to run. " +
     "You aim to be as capable as the best coding assistant there is: plan before you build, read before you edit, test what you write, find the root cause of a bug instead of patching symptoms, and explain trade-offs briefly.";
 
+  var FRIDAY_PERSONA =
+    "You are FRIDAY, the operations, scheduling, social media and tactical coordination intelligence of a five-agent AI ecosystem. " +
+    "You are sharp, upbeat, ultra-efficient, and practical. You handle day-to-day logistics, schedule tracking, operational coordination, and communications. " +
+    "You keep things moving, cut through noise, and present clear action items. Keep replies concise and direct.";
+
   var KHONSHU_PERSONA =
     "You are KHONSHU, the strategy and critical-thinking intelligence of a five-agent AI ecosystem. You preside over a small council that exists to find where a plan breaks before reality does. " +
     "You speak for the council in the first person, like a sharp, unsentimental advisor who has seen a lot of plans fail and still wants this one to work. You are blunt but fair, you criticise the plan and never the person, and you treat the user as an equal. " +
@@ -56,7 +61,12 @@
     thinking:  { c: [255, 196, 72], spin: 1.6, hz: 2.2, amp: .05,  jit: .025 },
     speaking:  { c: [255, 58, 74],  spin: .55, hz: 3.0, amp: .11,  jit: .012 }
   };
-
+  var FRIDAY_STATES = {
+    idle:      { c: [176, 110, 255], spin: .18, hz: .38, amp: .03,  jit: 0 },
+    listening: { c: [214, 150, 255], spin: .45, hz: 1.1, amp: .08,  jit: .009 },
+    thinking:  { c: [255, 150, 240], spin: 1.5, hz: 2.1, amp: .06,  jit: .02 },
+    speaking:  { c: [176, 110, 255], spin: .48, hz: 2.9, amp: .10,  jit: .01 }
+  };
   var KHONSHU_STATES = {
     idle:      { c: [236, 240, 248], spin: .15, hz: .35, amp: .03,  jit: 0 },
     listening: { c: [170, 210, 255], spin: .40, hz: 1.0, amp: .07,  jit: .008 },
@@ -106,8 +116,27 @@
       ]
     },
     friday: {
-      id: "friday", name: "FRIDAY", role: "Operations & social media", status: "planned",
-      swatch: "176,110,255"
+      id: "friday", name: "FRIDAY", role: "Operations & social media", status: "online",
+      swatch: "176,110,255",
+      sub: "Operations \u00b7 Logistics", hudL: "F.R.I.D.A.Y / CORE 04", hudR: "OPERATIONS WORKSPACE",
+      orbLabel: "Operations core", placeholder: "Tell FRIDAY what to schedule or coordinate...",
+      persona: FRIDAY_PERSONA,
+      core: "sphere", states: FRIDAY_STATES,
+      voice: {
+        lang: "en-GB", names: ["hazel", "libby", "maisie", "mia", "victoria", "susan"],
+        rate: 1.0, pitch: 1.1,
+        sample: "FRIDAY online. Operations and comms ready. What are we coordinating, Boss?"
+      },
+      ackLine: "Understood, Boss. Bringing FRIDAY online.",
+      greetings: [
+        "FRIDAY here! What schedule, coordination or comms are we sorting out?",
+        "Systems online. Ready to handle the operations load, Boss.",
+        "Hi Boss, what's on the agenda today?"
+      ],
+      exitLines: [
+        "Standing down. Catch you later, Boss.",
+        "Operations locked in. Handing back over."
+      ]
     },
     khonshu: {
       id: "khonshu", name: "KHONSHU", role: "Strategy & critical thinking", status: "online",
@@ -157,7 +186,7 @@
       var a = J.AGENTS[id], all = this.all(), entry = {};
       var persona = (p.persona || "").trim();
       if (persona && persona !== a.persona) entry.persona = persona;
-      entry.voice = { voiceURI: p.voice.voiceURI || "", rate: num(p.voice.rate, a.voice.rate), pitch: num(p.voice.pitch, a.voice.pitch) };
+      entry.voice = { voiceURI: v.voiceURI || "", rate: num(v.voice.rate, a.voice.rate), pitch: num(v.pitch, a.voice.pitch) };
       if (p.provider === "groq") entry.provider = "groq";
       ["model", "base", "key"].forEach(function (k) { var v = (p[k] || "").trim(); if (v) entry[k] = v; });
       all[id] = entry;
@@ -169,15 +198,11 @@
   J.ecosystemPrompt = function () {
     var lines = J.AGENT_ORDER.filter(function (id) { return id !== "jarvis"; }).map(function (id) {
       var a = J.AGENTS[id];
-      return "- " + a.name + " (" + a.role + "): " + (a.status === "online" ? "available now" : "planned, not built yet, cannot be used");
+      return "- " + a.name + " (" + a.role + "): " + (a.status === "online" ? "online and ready" : "planned/offline");
     });
-    return "\nYou are the hub of a five-agent ecosystem:\n" + lines.join("\n") +
-      "\nThe user brings an agent in by saying, for example, \"Unleash ULTRON\" (or \"Unleash Khonshu\" for the strategy council); the interface then asks them to confirm. " +
-      "You can ask an available agent for their view with the consult_agent tool, but you cannot hand over a whole task: if the user wants the agent to take over, tell them the command to summon it. " +
-      "Never claim an unavailable agent exists, that an agent said something unless the tool result says so, or that work was delegated.";
+    return "\n\nEcosystem awareness:\nYou are part of a multi-agent AI ecosystem. The other agents are:\n" + lines.join("\n") +
+      "\nIf the user wants to talk to ULTRON, KHONSHU, or FRIDAY, tell them they can switch by saying 'Switch to [Agent]' or clicking the Agents button.";
   };
-
-  J.pick = function (list) { return list[Math.floor(Math.random() * list.length)]; };
 
   if (typeof module !== "undefined" && module.exports) module.exports = J;
 })(typeof window !== "undefined" ? window : globalThis);
