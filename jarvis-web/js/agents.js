@@ -53,10 +53,10 @@
   };
 
   var DAREDEVIL_STATES = {
-    idle:      { c: [200, 32, 50],  spin: .15, hz: .35, amp: .03,  jit: 0 },
-    listening: { c: [255, 120, 60], spin: .40, hz: 1.0, amp: .07,  jit: .008 },
-    thinking:  { c: [255, 190, 70], spin: 1.8, hz: 2.4, amp: .06,  jit: .02 },
-    speaking:  { c: [200, 32, 50],  spin: .50, hz: 2.8, amp: .10,  jit: .012 }
+    idle:      { c: [236, 240, 248], spin: .15, hz: .35, amp: .03,  jit: 0 },
+    listening: { c: [170, 210, 255], spin: .40, hz: 1.0, amp: .07,  jit: .008 },
+    thinking:  { c: [255, 255, 255], spin: 1.8, hz: 2.4, amp: .06,  jit: .02 },
+    speaking:  { c: [236, 240, 248], spin: .50, hz: 2.8, amp: .10,  jit: .012 }
   };
 
   J.AGENTS = {
@@ -106,8 +106,8 @@
     },
     daredevil: {
       id: "daredevil", name: "DAREDEVIL", role: "Strategy & critical thinking", status: "online",
-      swatch: "205,40,60",
-      sub: "Strategy \u00b7 Red team", hudL: "D.A.R.E.D.E.V.I.L / CORE 03", hudR: "STRATEGY ROOM",
+      swatch: "236,240,248",
+      sub: "Strategy \u00b7 The council", hudL: "D.A.R.E.D.E.V.I.L / CORE 03", hudR: "STRATEGY ROOM",
       orbLabel: "Council", placeholder: "Put a plan or decision in front of the council...",
       persona: DAREDEVIL_PERSONA,
       core: "council", states: DAREDEVIL_STATES,

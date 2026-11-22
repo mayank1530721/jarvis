@@ -178,7 +178,7 @@
       // the table: a small hot diamond at the centre
       var cr = base * .16 * (1 + cur.amp * Math.sin(TAU * cur.hz * t) * m);
       var cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr * 3);
-      cg.addColorStop(0, "rgba(255,235,225,.9)"); cg.addColorStop(.3, rgba(cur, .85)); cg.addColorStop(1, rgba(cur, 0));
+      cg.addColorStop(0, "rgba(255,255,255,.95)"); cg.addColorStop(.3, rgba(cur, .85)); cg.addColorStop(1, rgba(cur, 0));
       ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, cr * 3, 0, TAU); ctx.fill();
       ctx.fillStyle = rgba(cur, .95);
       ctx.beginPath(); ctx.moveTo(cx, cy - cr); ctx.lineTo(cx + cr, cy); ctx.lineTo(cx, cy + cr); ctx.lineTo(cx - cr, cy); ctx.closePath(); ctx.fill();
