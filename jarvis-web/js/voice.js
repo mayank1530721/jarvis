@@ -16,7 +16,9 @@
   // Higher is better. Gender dominates, then language, then a preferred name, then voice quality.
   function scoreVoice(v, hint) {
     var s = 0, name = v.name || "", lang = v.lang || "";
-    s += isMale(name) ? 100 : (isFemale(name) ? -100 : 0);
+    if (hint && hint.gender === "female") s += isFemale(name) ? 180 : (isMale(name) ? -180 : 0);
+    else if (hint && hint.gender === "male") s += isMale(name) ? 180 : (isFemale(name) ? -180 : 0);
+    else s += isMale(name) ? 100 : (isFemale(name) ? -100 : 0);
     if (hint && hint.lang && lang.toLowerCase().replace("_", "-").indexOf(hint.lang.toLowerCase()) === 0) s += 40;
     else if (/^en([-_]|$)/i.test(lang)) s += 20;
     if (hint && hint.names) {
