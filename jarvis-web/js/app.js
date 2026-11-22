@@ -19,6 +19,12 @@
   // An agent with its own endpoint never receives the shared key (it could be a different service).
   function cfgFor(id) {
     const c = cfg(), p = J.prefs.get(id);
+    if (p.provider === "groq") return {
+      ...c, model: p.model || "llama-3.3-70b-versatile",
+      base: "https://api.groq.com/openai/v1",
+      key: store.get("jarvis.groqKey", ""),
+      fallbacks: ""
+    };
     if (!p.model && !p.base && !p.key) return c;
     const base = p.base || c.base, local = /localhost|127\.0\.0\.1/.test(base);
     return { ...c, model: p.model || c.model, base,
@@ -803,22 +809,27 @@
     $("sPitchValue").textContent = Number($("sPitch").value).toFixed(2);
   }
   function formToDraft() {
-    draft[draftAgent] = { model: $("aModel").value, base: $("aBase").value, key: $("aKey").value, persona: $("sPersona").value, voiceURI: $("sVoice").value, rate: Number($("sRate").value), pitch: Number($("sPitch").value) };
+    draft[draftAgent] = { provider: $("aProvider").value, model: $("aModel").value, base: $("aBase").value, key: $("aKey").value, persona: $("sPersona").value, voiceURI: $("sVoice").value, rate: Number($("sRate").value), pitch: Number($("sPitch").value) };
   }
   function draftToForm() {
     const d = draft[draftAgent], a = agent(draftAgent);
     $("sPersonaLabel").textContent = a.name + " personality";
     $("sVoiceHeading").textContent = a.name + " VOICE";
+    $("aProvider").value = d.provider || "shared";
+    $("aProvider").disabled = !["jarvis", "ultron"].includes(draftAgent);
     $("aModel").value = d.model; $("aBase").value = d.base; $("aKey").value = d.key;
+    const usingGroq = $("aProvider").value === "groq";
+    $("aModel").placeholder = usingGroq ? "e.g. llama-3.3-70b-versatile" : "e.g. qwen2.5-coder:32b";
+    $("aBase").disabled = usingGroq; $("aKey").disabled = usingGroq;
     $("sPersona").value = d.persona; $("sRate").value = d.rate; $("sPitch").value = d.pitch;
     refreshVoiceOptions(); paintVoiceValues();
     for (const b of $("sAgentPick").children) b.classList.toggle("on", b.dataset.id === draftAgent);
   }
   $("setBtn").onclick = () => {
     const c = cfg();
-    $("sKey").value = c.key; $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey(); $("sGithub").value = ghToken(); $("sAgentToken").value = handsToken(); $("sAgentBase").value = String(store.get("jarvis.agentBase", "") || ""); $("sRelay").value = J.uplika.relay;
+    $("sKey").value = c.key; $("sGroq").value = store.get("jarvis.groqKey", ""); $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey(); $("sGithub").value = ghToken(); $("sAgentToken").value = handsToken(); $("sAgentBase").value = String(store.get("jarvis.agentBase", "") || ""); $("sRelay").value = J.uplika.relay;
     draft = {}; draftAgent = agent().status === "online" ? S.agent : "jarvis";
-    for (const id of onlineAgents()) { const p = J.prefs.get(id); draft[id] = { model: p.model, base: p.base, key: p.key, persona: p.persona, voiceURI: p.voice.voiceURI, rate: p.voice.rate, pitch: p.voice.pitch }; }
+    for (const id of onlineAgents()) { const p = J.prefs.get(id); draft[id] = { provider: p.provider || "shared", model: p.model, base: p.base, key: p.key, persona: p.persona, voiceURI: p.voice.voiceURI, rate: p.voice.rate, pitch: p.voice.pitch }; }
     const pick = $("sAgentPick"); pick.innerHTML = "";
     for (const id of onlineAgents()) {
       const b = el("button", "", agent(id).name); b.type = "button"; b.dataset.id = id;
@@ -843,7 +854,9 @@
     $("sModel").placeholder = "type the model name you pulled in Ollama";
     $("sModel").focus();
   };
+  $("aProvider").onchange = () => { formToDraft(); draftToForm(); };
   $("sSave").onclick = () => {
+    store.set("jarvis.groqKey", $("sGroq").value.trim());
     store.set("jarvis.uplika", $("sUplika").value.trim());
     store.set("jarvis.github", $("sGithub").value.trim());
     store.set("jarvis.agentToken", $("sAgentToken").value.trim());
@@ -856,7 +869,7 @@
     formToDraft();
     for (const id of onlineAgents()) {
       const d = draft[id];
-      J.prefs.save(id, { persona: d.persona, model: d.model, base: d.base, key: d.key, voice: { voiceURI: d.voiceURI, rate: d.rate, pitch: d.pitch } });
+      J.prefs.save(id, { persona: d.persona, provider: d.provider, model: d.model, base: d.base, key: d.key, voice: { voiceURI: d.voiceURI, rate: d.rate, pitch: d.pitch } });
     }
     $("settings").close();
     add("sys", "Settings saved.");

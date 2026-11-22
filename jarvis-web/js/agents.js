@@ -150,7 +150,7 @@
       return {
         persona: o.persona || a.persona,
         voice: { voiceURI: v.voiceURI || "", rate: num(v.rate, a.voice.rate), pitch: num(v.pitch, a.voice.pitch) },
-        model: o.model || "", base: o.base || "", key: o.key || ""   // optional: this agent uses its own model / endpoint
+        provider: o.provider || "shared", model: o.model || "", base: o.base || "", key: o.key || ""   // optional: provider or custom endpoint
       };
     },
     save: function (id, p) {
@@ -158,6 +158,7 @@
       var persona = (p.persona || "").trim();
       if (persona && persona !== a.persona) entry.persona = persona;
       entry.voice = { voiceURI: p.voice.voiceURI || "", rate: num(p.voice.rate, a.voice.rate), pitch: num(p.voice.pitch, a.voice.pitch) };
+      if (p.provider === "groq") entry.provider = "groq";
       ["model", "base", "key"].forEach(function (k) { var v = (p[k] || "").trim(); if (v) entry[k] = v; });
       all[id] = entry;
       J.store.set("jarvis.agentprefs", all);
