@@ -337,6 +337,22 @@ test("chimePick: needs a real message, a topic match and the coin flip; picks on
   assert.equal(J.chimePick("my python script crashes with an error on boot", ["khonshu", "friday"], yes), null, "ULTRON is not a candidate");
   assert.match(J.STYLE, /someone in the room/);
 });
+
+(async () => {
+  const r = (status, body) => async () => ({ ok: status < 400, status, json: async () => body || {} });
+  await testAsync("testKey explains each way a key can fail, and checks the model", async () => {
+    const base = "https://api.groq.com/openai/v1";
+    assert.match((await J.model.testKey(base, "")).message, /No key is saved/);
+    assert.match((await J.model.testKey(base, "gsk_a b")).message, /space or line break/);
+    assert.match((await J.model.testKey(base, "gsk_x", "", r(401))).message, /rejected this key/);
+    assert.match((await J.model.testKey(base, "gsk_x", "", async () => { throw new Error("net"); })).message, /Could not reach/);
+    const ok = await J.model.testKey(base, "gsk_x", "llama-3.3-70b-versatile", r(200, { data: [{ id: "llama-3.3-70b-versatile" }] }));
+    assert.ok(ok.ok); assert.equal(ok.message, "The key works.");
+    const gone = await J.model.testKey(base, "gsk_x", "old-model", r(200, { data: [{ id: "a" }, { id: "b" }] }));
+    assert.ok(gone.ok && /old-model.*not on your account/.test(gone.message));
+    assert.ok((await J.model.testKey(base, "gsk_x", "", r(429))).ok);
+  });
+})();
 // ---------- VISION ----------
 test("VISION is a full agent: online, own core, summoned by name, honest about what he can look up", () => {
   const v = J.AGENTS.vision;

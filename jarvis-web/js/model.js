@@ -169,6 +169,24 @@
     }
   }
 
-  J.model = { call: call, callProvider: callProvider, readStream: readStream, recentHistory: recentHistory, compactToolResults: compactToolResults };
+  // Checks a key by asking the provider for its model list (free, no tokens used). Returns { ok, message, models }.
+  // The messages are written for a person, because "API error 401" does not say what to do.
+  async function testKey(base, key, wantModel, f) {
+    key = String(key || "").trim();
+    if (!key) return { ok: false, message: "No key is saved. Paste it in the field above first." };
+    if (/\s/.test(key)) return { ok: false, message: "The key contains a space or line break. Paste it again without anything around it." };
+    var res;
+    try { res = await (f || root.fetch)(String(base).replace(/\/+$/, "") + "/models", { headers: { Authorization: "Bearer " + key } }); }
+    catch (e) { return { ok: false, message: "Could not reach the service. Check your internet, or an ad blocker or VPN blocking it." }; }
+    if (res.status === 401 || res.status === 403) return { ok: false, message: "The service rejected this key (" + res.status + "). Copy it again from the provider's console, with no extra characters, and make sure it is a key for this service." };
+    if (res.status === 429) return { ok: true, message: "The key looks valid, but the service says you are being rate limited right now. Try again in a minute." };
+    if (!res.ok) return { ok: false, message: "The service answered with an error (" + res.status + "). Try again in a moment." };
+    var data = {}; try { data = await res.json(); } catch (e) { /* fine */ }
+    var models = ((data && data.data) || []).map(function (m) { return m.id; });
+    var has = !wantModel || !models.length || models.indexOf(wantModel) >= 0;
+    return { ok: true, models: models, message: "The key works." + (has ? "" : " But the model \"" + wantModel + "\" is not on your account's list, so pick another one (for example " + models.slice(0, 3).join(", ") + ").") };
+  }
+
+  J.model = { testKey: testKey, call: call, callProvider: callProvider, readStream: readStream, recentHistory: recentHistory, compactToolResults: compactToolResults };
   if (typeof module !== "undefined" && module.exports) module.exports = J;
 })(typeof window !== "undefined" ? window : globalThis);

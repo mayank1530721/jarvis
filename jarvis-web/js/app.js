@@ -828,7 +828,7 @@
     if (!S.privateChat && await handleCommand(text)) return;
     if (!cfgFor(S.agent).key) {
       const own = J.prefs.get(S.agent);
-      add("sys", (own.model || own.base || own.key) ? "This agent has its own endpoint but no API key. Add one for it in Settings, or clear its endpoint." : "Open Settings and paste your API key first.");
+      add("sys", own.provider === "groq" ? "This agent is set to Groq but no Groq key is saved. Add it in Settings, or switch the agent back to the shared provider." : (own.model || own.base || own.key) ? "This agent has its own endpoint but no API key. Add one for it in Settings, or clear its endpoint." : "Open Settings and paste your API key first.");
       return;
     }
     const id = S.agent, h = S.privateChat ? S.privateHistory : hist(id);
@@ -961,6 +961,25 @@
     $("sModel").focus();
   };
   $("aProvider").onchange = () => { formToDraft(); draftToForm(); };
+  $("sGroqTest").onclick = async () => {
+    const msg = $("sGroqMsg"); msg.textContent = "Testing...";
+    const key = $("sGroq").value.trim();
+    const want = (draft.ultron && draft.ultron.provider === "groq" && draft.ultron.model) || "llama-3.3-70b-versatile";
+    const r = await J.model.testKey("https://api.groq.com/openai/v1", key, want);
+    msg.textContent = (r.ok ? "OK: " : "Problem: ") + r.message + (r.ok && key && !/^gsk_/.test(key) ? " (Groq keys normally start with gsk_, so double-check this is the right one.)" : "");
+    msg.style.color = r.ok ? "#5dffb0" : "#ff8a8a";
+  };
+  $("sGroqUse").onclick = () => {
+    formToDraft();
+    for (const id of ["jarvis", "ultron"]) {
+      if (!draft[id]) continue;
+      draft[id].provider = "groq";
+      if (/^gemini/i.test(draft[id].model || "")) draft[id].model = "";   // a Gemini model name does not exist on Groq
+      draft[id].base = ""; draft[id].key = "";
+    }
+    draftToForm();
+    const msg = $("sGroqMsg"); msg.style.color = ""; msg.textContent = "JARVIS and ULTRON are set to Groq. Press Save to keep it. Gemini stays as their backup.";
+  };
   $("sSave").onclick = () => {
     store.set("jarvis.groqKey", $("sGroq").value.trim());
     store.set("jarvis.chime", $("sChime").checked);

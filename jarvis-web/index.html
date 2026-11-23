@@ -134,7 +134,11 @@
   <small>Default is Google Gemini. Change the model, base URL and backups to switch provider later.</small>
   <label>Groq API key (optional; lets JARVIS and ULTRON use Groq when selected below)</label>
   <input type="password" id="sGroq" placeholder="gsk_... (stored only in this browser)">
-  <small>Choose Groq separately for JARVIS or ULTRON in the agent settings below. Your Groq key is sent only to api.groq.com.</small>
+  <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">
+    <button id="sGroqTest" type="button" style="padding:6px 10px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--c);cursor:pointer;border-radius:6px">Test Groq key</button>
+    <button id="sGroqUse" type="button" style="padding:6px 10px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--c);cursor:pointer;border-radius:6px">Use Groq for JARVIS and ULTRON</button>
+  </div>
+  <small id="sGroqMsg">Saving the key is not enough: an agent only uses Groq when its Provider is set to Groq (the second button does that for JARVIS and ULTRON, then press Save). Otherwise Groq is just the backup when the main provider fails. Your Groq key is sent only to api.groq.com.</small>
   <div style="margin-top:8px"><button id="sLocal" type="button" style="padding:6px 10px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--c);cursor:pointer;border-radius:6px">Use local model (Ollama, works offline)</button></div>
   <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="sChime" style="width:auto"> Let other agents jump into a chat now and then (one short remark, costs one extra AI call each time)</label>
   <label>Uplika API key (optional, lets JARVIS post to your social channels after you approve each post)</label>
