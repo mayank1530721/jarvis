@@ -320,9 +320,7 @@ body[data-agent="friday"] .core-reticle span { border-color:rgba(214,180,255,.9)
 .friday-board-card em { color:var(--c); font:9px var(--mono); font-style:normal; letter-spacing:1px; }
 .friday-note p { color:var(--text); font-size:12px; line-height:1.7; margin:5px 0 12px; }
 .friday-note>span { color:var(--dim); font:9px var(--mono); letter-spacing:1.5px; }
-@media(max-width:1050px) {
-  body[data-agent="friday"] .friday-side { display:none !important; }
-}
+/* FRIDAY's side panels follow the shared layout rules above and hide with every agent's below 900px. */
 
 /* BLACK VAULT */
 #vaultBtn{border-color:rgba(176,110,255,.55);color:#d7b7ff}

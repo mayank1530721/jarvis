@@ -68,6 +68,7 @@
     memories: store.get("jarvis.memories", []),
     histories: {},          // agent id -> API-format messages, each agent keeps its own
     privateChat: false, privateHistory: [],
+    last: null,             // the specialist agent talked about most recently, so "tell him to..." knows who "him" is
     pending: null           // { agent, bubble, row } while JARVIS waits for "are you certain?"
   };
   const hist = id => { id = id || S.agent; return S.histories[id] || (S.histories[id] = store.get("jarvis.history." + id, [])); };
@@ -448,7 +449,7 @@
   const MAX_CONSULTS = 3;   // per user request; each one is an extra model call, and free tiers have rate limits
   const consultTargets = id => J.AGENT_ORDER.filter(x => x !== id && agent(x).status === "online");
   const consultTool = id => ({ type: "function", function: { name: "consult_agent",
-    description: "Ask another available agent for their view and wait for the answer. Use it when their specialty would really improve your answer, for example the engineer asks the strategy council to challenge a design, or the strategy council asks the engineer whether something is feasible. Include in your question the facts and any other agent's points they need, because they do not see this conversation. You may consult up to " + MAX_CONSULTS + " times per request; then give the user your own conclusion. The user sees the exchange.",
+    description: "Ask another available agent for their OPINION and wait for the answer. The agent answers from the text you send only: it has no tools, cannot read or change files, cannot use GitHub and cannot build anything, so never use this to get work done (use switch_agent for that). Use it when their specialty would really improve your answer, for example the engineer asks the strategy council to challenge a design, or the strategy council asks the engineer whether something is feasible. Include in your question the facts and any other agent's points they need, because they do not see this conversation. You may consult up to " + MAX_CONSULTS + " times per request; then give the user your own conclusion. The user sees the exchange.",
     parameters: { type: "object", properties: {
       agent: { type: "string", enum: consultTargets(id).map(x => x), description: "Which agent to ask (lowercase id)." },
       question: { type: "string", description: "What you want their view on, self-contained." } }, required: ["agent", "question"] } } });
@@ -560,7 +561,7 @@
       if (!String(question || "").trim()) return "No question was given.";
       if (S.consults >= MAX_CONSULTS) return "Consult limit reached for this request. Give the user your own conclusion now, using what you already have.";
       if (!cfgFor(tid).key) return target.name + " has no API key set up yet, so they cannot be consulted.";
-      S.consults++;
+      S.consults++; if (tid !== "jarvis") S.last = tid;
       add("sys", agent(from).name + " asks " + target.name + ": " + question);
       logActivity(agent(from).name + " consulted " + target.name, from);
       const msg = await J.model.call({ cfg: cfgFor(tid), alt: altFor(tid), system: consultPrompt(tid, from), history: [{ role: "user", content: String(question) }], tools: [], status: () => {} });
@@ -673,6 +674,7 @@
       return;
     }
     clearPending();
+    S.last = id;
     S.pending = { agent: id, task: task || "" };
     const line = J.pick(J.lines.confirm).replace("{name}", a.name);
     // From the model's switch tool the line is shown but not written into the chat history, which must stay
@@ -692,6 +694,7 @@
   }
   async function returnToJarvis() {
     const from = agent();
+    if (S.agent !== "jarvis") S.last = S.agent;
     logActivity(from.name + " stood down");
     await agentSay(S.agent, J.pick(from.exitLines || ["Standing down."]), 6000).spoken;
     await switchAgent("jarvis");
@@ -732,7 +735,7 @@
     if (S.carry) { const job = S.carry; S.carry = null; await send(job); }
   }
   async function handleCommand(text) {
-    const it = J.parseIntent(text, { pending: S.pending ? S.pending.agent : null, active: S.agent });
+    const it = J.parseIntent(text, { pending: S.pending ? S.pending.agent : null, active: S.agent, last: S.last });
     if (!it) return false;
     if (it.type === "cancel" && it.passthrough) { clearPending(); return false; }
     await runIntent(it, text);

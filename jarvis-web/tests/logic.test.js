@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const js = f => path.join(__dirname, "..", "js", f);
 
-require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("uplika.js")); require(js("github.js")); require(js("hands.js")); require(js("voice.js")); require(js("model.js"));
+require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("uplika.js")); require(js("github.js")); require(js("hands.js")); require(js("vault.js")); require(js("voice.js")); require(js("model.js"));
 const J = globalThis.J;
 
 let passed = 0;
@@ -290,6 +290,40 @@ test("every agent gets the same short speaking guide, and scripted lines come in
   assert.doesNotMatch(J.AGENTS.jarvis.persona, /professional, intelligent, composed, articulate/);   // the old stiff butler wording
   assert.match(J.ecosystemPrompt(), /switch_agent/);
 });
+
+// ---------- handing work over: "tell him to ...", "have ultron ..." ----------
+test("telling an agent to do something hands the job over, and 'him' means the agent talked about last", () => {
+  const c = { pending: null, active: "jarvis", last: "ultron" };
+  const a = J.parseIntent("tell him to make fridays interface as we planned", c);
+  assert.equal(a.type, "summon"); assert.equal(a.agent, "ultron"); assert.equal(a.task, "tell him to make fridays interface as we planned");
+  const b = J.parseIntent("tell him he has access to git hud make fridays interface there first its his first task", c);
+  assert.equal(b.agent, "ultron"); assert.match(b.task, /first task$/);
+  for (const t of ["have ultron fix the bug", "make ultron build it", "ask ultron to build the ui", "tell ultron to build it", "have him fix it", "get him to check app.js"])
+    assert.equal(J.parseIntent(t, c).agent, "ultron", t);
+  assert.equal(J.parseIntent("tell khonshu to review my plan", c).agent, "khonshu");
+});
+test("handing over needs a known agent: pronouns with nobody talked about, and plain chat, are left alone", () => {
+  const none = { pending: null, active: "jarvis", last: null }, c = { pending: null, active: "jarvis", last: "ultron" };
+  assert.equal(J.parseIntent("tell him to make it", none), null);
+  assert.equal(J.parseIntent("tell him to make it", { ...none, last: "jarvis" }), null);
+  for (const t of ["make it work", "tell him thanks", "have you seen ultron", "ask khonshu what he thinks", "tell me about ultron", "make a plan for friday"])
+    assert.equal(J.parseIntent(t, c), null, t);
+});
+test("while JARVIS waits for confirmation, a hand-over of the same agent confirms it and keeps the job", () => {
+  const r = J.parseIntent("tell him to make fridays interface", { pending: "ultron", active: "jarvis", last: "ultron" });
+  assert.equal(r.type, "confirm"); assert.equal(r.task, "tell him to make fridays interface");
+});
+test("JARVIS is told that consulting is for opinions and work needs a switch, and ULTRON knows Jarvis has no framework", () => {
+  assert.match(J.ecosystemPrompt(), /consult_agent only for an opinion/); assert.match(J.ecosystemPrompt(), /work needs switch_agent/);
+  assert.match(J.AGENTS.ultron.persona, /no build step and no framework/); assert.match(J.AGENTS.ultron.persona, /do not ask which stack/);
+});
+test("FRIDAY is a full agent: online, she/her, female voice, summoned by name", () => {
+  const f = J.AGENTS.friday;
+  assert.equal(f.status, "online"); assert.equal(f.voice.gender, "female"); assert.match(f.persona, /she\/her/);
+  assert.ok(f.ackLines.length >= 3 && f.greetings.length >= 3 && f.exitLines.length >= 2);
+  assert.equal(J.parseIntent("unleash friday", { pending: null, active: "jarvis" }).agent, "friday");
+  assert.ok(J.AGENT_ORDER.includes("friday"));
+});
 (async () => {
   await testAsync("plain text streams in", async () => {
     const seen = [];
@@ -431,6 +465,66 @@ test("every agent gets the same short speaking guide, and scripted lines come in
     assert.equal((await J.github.read("T", "me/proj", "")).type, "dir");
     await assert.rejects(J.github.read("", "me/proj", "README.md"), /No GitHub token/);
   });
+
+
+  // ---------- Black Vault (vault.js) ----------
+  const memStore = {}; const fakeLS = { getItem: k => (k in memStore ? memStore[k] : null), setItem: (k, v) => { memStore[k] = String(v); }, removeItem: k => { delete memStore[k]; } };
+  const realLS = globalThis.localStorage, realSecure = globalThis.isSecureContext;
+  Object.defineProperty(globalThis, "localStorage", { value: fakeLS, configurable: true, writable: true });
+  Object.defineProperty(globalThis, "isSecureContext", { value: true, configurable: true, writable: true });
+  const VK = "jarvis.blackVault.v1";
+  try {
+    await testAsync("vault: refuses short or identical passphrases, and does not create anything", async () => {
+      await assert.rejects(() => J.vault.setup("abcd", "efghi"), /at least 5/);
+      await assert.rejects(() => J.vault.setup("samepass1", "samepass1"), /different/);
+      assert.equal(J.vault.exists(), false); assert.equal(memStore[VK], undefined);
+    });
+    await testAsync("vault: creates, stores only ciphertext, and keeps passphrases out of storage", async () => {
+      await J.vault.setup("owner-pass-1", "viewer-pass-2");
+      assert.ok(J.vault.exists() && J.vault.isUnlocked() && J.vault.mode() === "private");
+      await J.vault.save(["my-secret-plan-XJ42", "second note"]);
+      const raw = memStore[VK], rec = JSON.parse(raw);
+      assert.ok(!raw.includes("XJ42") && !raw.includes("secret") && !raw.includes("owner-pass-1") && !raw.includes("viewer-pass-2"));
+      assert.equal(rec.cipher, "AES-256-GCM"); assert.equal(rec.kdf, "PBKDF2-SHA-256"); assert.ok(rec.iterations >= 300000);
+      assert.notEqual(rec.vaultWrap.salt, rec.reviewWrap.salt, "each passphrase has its own salt");
+      await assert.rejects(() => J.vault.setup("another-pass-3", "another-pass-4"), /already exists/);
+    });
+    await testAsync("vault: locking clears memory; wrong passphrase fails; right ones unlock the right way", async () => {
+      J.vault.lock(); assert.ok(!J.vault.isUnlocked()); assert.deepEqual(J.vault.getNotes(), []);
+      await assert.rejects(() => J.vault.unlock("wrong-pass", "private"));
+      assert.ok(!J.vault.isUnlocked(), "a failed unlock leaves it locked");
+      await assert.rejects(() => J.vault.unlock("viewer-pass-2", "private"), undefined, "the review passphrase cannot open private access");
+      await assert.rejects(() => J.vault.unlock("owner-pass-1", "review"), undefined, "the owner passphrase is not the review one");
+      const own = await J.vault.unlock("owner-pass-1", "private");
+      assert.equal(own.mode, "private"); assert.deepEqual(own.notes, ["my-secret-plan-XJ42", "second note"]);
+      J.vault.lock();
+      const rev = await J.vault.unlock("viewer-pass-2", "review");
+      assert.equal(rev.mode, "review"); assert.equal(rev.notes.length, 2);
+      await assert.rejects(() => J.vault.save(["changed"]), /Unlock with the vault password/);
+      J.vault.lock();
+      await J.vault.unlock("owner-pass-1", "private");
+      assert.deepEqual(J.vault.getNotes(), ["my-secret-plan-XJ42", "second note"], "review mode changed nothing");
+    });
+    await testAsync("vault: tampered ciphertext is rejected instead of read", async () => {
+      J.vault.lock();
+      const rec = JSON.parse(memStore[VK]); const d = Buffer.from(rec.data.data, "base64"); d[0] ^= 1; rec.data.data = d.toString("base64");
+      memStore[VK] = JSON.stringify(rec);
+      await assert.rejects(() => J.vault.unlock("owner-pass-1", "private"));
+      assert.ok(!J.vault.isUnlocked());
+    });
+    await testAsync("vault: a failed storage write reports clearly and does not pretend it saved", async () => {
+      memStore[VK] = undefined; delete memStore[VK]; J.vault.lock();
+      const failing = { ...fakeLS, setItem: () => { throw new Error("quota exceeded"); } };
+      Object.defineProperty(globalThis, "localStorage", { value: failing, configurable: true, writable: true });
+      await assert.rejects(() => J.vault.setup("owner-pass-1", "viewer-pass-2"), /Could not save the encrypted vault/);
+      Object.defineProperty(globalThis, "localStorage", { value: fakeLS, configurable: true, writable: true });
+      assert.equal(J.vault.exists(), false);
+    });
+  } finally {
+    Object.defineProperty(globalThis, "localStorage", { value: realLS, configurable: true, writable: true });
+    Object.defineProperty(globalThis, "isSecureContext", { value: realSecure, configurable: true, writable: true });
+    J.vault.lock();
+  }
 
   // ---------- two providers backing each other up ----------
   const goodReply = text => ({ ok: true, json: async () => ({ choices: [{ message: { role: "assistant", content: text } }] }) });

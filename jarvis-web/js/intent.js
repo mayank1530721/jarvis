@@ -21,6 +21,14 @@
   // The same, followed by what the user wants done: "get ultron to fix the login bug", "bring in the council for this plan".
   // The job must be introduced by to / and / for / so / about / with / on, so "call ultron a villain" is still just chat.
   var SUMMON_TASK = new RegExp("^" + LEAD + VERB + "\\s+(?:up\\s+)?(?:the\\s+)?(" + NAMES + ")(?:\\s+(?:in|up|out|on|over))?\\s+(?:to|and|for|so|about|with|on)\\s+\\S.*$");
+  // Handing work to an agent: "tell ultron to build it", "tell him he has access, make X", "have him fix it", "make ultron build it".
+  // "him / her / them / it" means whichever agent was talked about last. "ask khonshu what he thinks" is a question, not a job, so it is not here.
+  var WHO = "(?:the\\s+)?(" + NAMES + "|him|her|them)";
+  var DELEGATE = [
+    new RegExp("^" + LEAD + "(?:tell|order|instruct|command)\\s+" + WHO + "\\s+(?:to|that|he|she|they|you|and)\\s+\\S.*$"),
+    new RegExp("^" + LEAD + "(?:ask|get|make|let)\\s+" + WHO + "\\s+to\\s+\\S.*$"),
+    new RegExp("^" + LEAD + "(?:have|make)\\s+" + WHO + "\\s+(?!been\\b|seen\\b|a\\b|an\\b|the\\b)\\S.*$")
+  ];
   var BARE = new RegExp("^(?:(?:hey|ok|okay|yo|oi|hi)\\s+)?(?:the\\s+)?(" + NAMES + ")(?:\\s+(?:now|please|online|boss|sir|here))*$");
   var RETURN = /^(?:(?:ok|okay|alright|please|thanks|thank you|yes|boss|hey)\s+)*(?:stand down|return(?: to jarvis)?|go back(?: to jarvis)?|back to jarvis|switch(?: back)? to jarvis|bring (?:back )?jarvis(?: back)?|jarvis take over|jarvis come back|get jarvis|call jarvis|talk to jarvis|speak to jarvis|dismissed|power down|thats enough)(?:\s+(?:now|please|boss|sir))*$/;
   var CONFIRM = /^(?:(?:ok|okay|alright|boss|jarvis)\s+)*(?:yes|yeah|yep|yup|sure|confirm|confirmed|affirmative|do it|go ahead|proceed|absolutely|certainly|definitely|i am sure|i am certain|i am|im sure|im certain|release (?:him|it)|unleash (?:him|it)|go for it)(?:\s+(?:please|boss|sir|jarvis|im sure|im certain))*$/;
@@ -37,7 +45,21 @@
     return (id === "council" || id === "daredevil" || /^kh?onsh?u$/.test(id)) ? "khonshu" : id;
   }
 
-  // ctx = { pending: agent id waiting for confirmation or null, active: agent id on screen }
+  // Which agent does this "do something" sentence hand work to, or null. ctx.last is the agent talked about last.
+  function taskAgent(t, ctx) {
+    var m = SUMMON_TASK.exec(t);
+    if (m) return agentId(m[1]);
+    for (var i = 0; i < DELEGATE.length; i++) {
+      m = DELEGATE[i].exec(t);
+      if (!m) continue;
+      var who = m[1];
+      if (/^(him|her|them)$/.test(who)) { if (ctx.last && ctx.last !== "jarvis") return ctx.last; continue; }
+      return agentId(who);
+    }
+    return null;
+  }
+
+  // ctx = { pending: agent id waiting for confirmation or null, active: agent id on screen, last: agent talked about last or null }
   J.parseIntent = function (text, ctx) {
     var t = normalize(text);
     if (!t) return null;
@@ -48,8 +70,8 @@
       if (CANCEL.test(t)) return { type: "cancel" };
       m = SUMMON.exec(t) || BARE.exec(t);
       if (m) return agentId(m[1]) === ctx.pending ? { type: "confirm" } : { type: "summon", agent: agentId(m[1]) };
-      m = SUMMON_TASK.exec(t);   // "get ultron to fix the login bug" while the question is open: confirm, and take the job along
-      if (m) return agentId(m[1]) === ctx.pending ? { type: "confirm", task: String(text).trim() } : { type: "summon", agent: agentId(m[1]), task: String(text).trim() };
+      var pa = taskAgent(t, { last: ctx.pending });   // "get ultron to fix the login bug" while the question is open: confirm, and take the job along
+      if (pa) return pa === ctx.pending ? { type: "confirm", task: String(text).trim() } : { type: "summon", agent: pa, task: String(text).trim() };
       return { type: "cancel", passthrough: true };   // anything else: drop the question, treat it as a normal message
     }
 
@@ -59,8 +81,8 @@
 
     m = SUMMON.exec(t) || BARE.exec(t);
     if (m) return { type: "summon", agent: agentId(m[1]) };
-    m = SUMMON_TASK.exec(t);
-    if (m) return { type: "summon", agent: agentId(m[1]), task: String(text).trim() };   // the agent gets the whole request once it is released
+    var ta = taskAgent(t, ctx);
+    if (ta) return { type: "summon", agent: ta, task: String(text).trim() };   // the agent gets the whole request once it is released
     return null;
   };
 
