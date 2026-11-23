@@ -629,6 +629,18 @@ test("the vault text shown to the private chat agent is capped: newest entries k
       Object.defineProperty(globalThis, "localStorage", { value: fakeLS, configurable: true, writable: true });
       assert.equal(J.vault.exists(), false);
     });
+    await testAsync("vault: a failed save (storage full) keeps the existing vault and its notes", async () => {
+      await J.vault.setup("owner-pass-1", "viewer-pass-2");
+      await J.vault.addNote("Important note from earlier.");
+      const before = memStore[VK];
+      const failing = { ...fakeLS, setItem: () => { throw new Error("quota exceeded"); } };
+      Object.defineProperty(globalThis, "localStorage", { value: failing, configurable: true, writable: true });
+      await assert.rejects(() => J.vault.addNote("one more that cannot be saved"), /Could not save/);
+      Object.defineProperty(globalThis, "localStorage", { value: fakeLS, configurable: true, writable: true });
+      assert.equal(memStore[VK], before, "the stored vault is byte-for-byte unchanged");
+      J.vault.lock(); await J.vault.unlock("owner-pass-1", "private");
+      assert.ok(J.vault.getNotes().includes("Important note from earlier."));
+    });
   } finally {
     Object.defineProperty(globalThis, "localStorage", { value: realLS, configurable: true, writable: true });
     Object.defineProperty(globalThis, "isSecureContext", { value: realSecure, configurable: true, writable: true });

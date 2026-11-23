@@ -12,12 +12,15 @@ function readVault(){
 }
 function writeVault(value){
   var serialized=JSON.stringify(value);
+  var previous=null;
+  try{previous=root.localStorage.getItem(KEY)}catch(ignore){}
   try{
     root.localStorage.setItem(KEY,serialized);
     var check=root.localStorage.getItem(KEY);
     if(check!==serialized)throw Error("Storage verification failed.");
   }catch(e){
-    try{root.localStorage.removeItem(KEY)}catch(ignore){}
+    // A failed save must never destroy what was already stored: put the previous copy back.
+    try{if(previous===null)root.localStorage.removeItem(KEY);else root.localStorage.setItem(KEY,previous)}catch(ignore){}
     throw Error("Could not save the encrypted vault in this browser. Check that site storage is enabled and has free space. "+(e&&e.message?e.message:""));
   }
 }
