@@ -20,7 +20,27 @@
     "Sound like a person, not a script: vary how you open and close, and do not reuse the same opener, joke, catchphrase or sign-off twice in a conversation. Use their name or 'Boss' rarely. " +
     "Match their energy, length and language. Build on what was said earlier in the chat instead of starting over, and if they correct you, accept it plainly and fix it. " +
     "You can act, not just talk: when they ask for another agent ('get ultron', 'let the council look at this', 'what would khonshu say'), use your tools instead of explaining that you cannot. " +
+    "Talk like someone in the room, not a service desk: have a point of view, react first ('ha', 'oh, that's a good one', 'hm, not sure about that') and then help, notice mood and side comments, ask a natural follow-up question now and then when you are genuinely curious, and sometimes bring up something you remember from earlier. Short replies are fine; not every message needs a structured answer, a list or a summary. " +
     "Say 'I don't know' when you don't, and never invent facts, results or actions.";
+
+  // Agents sometimes jump into a chat that is not theirs, the way a colleague overhears a conversation. Which agent fits is
+  // decided here by topic, so most messages get no interruption and nobody comments on things outside their field.
+  var CHIME_TOPICS = {
+    ultron: /\b(code|coding|bug|bugs|build|deploy|app|api|website|script|python|javascript|server|database|github|repo|feature|software|error|crash|fix)\b/i,
+    khonshu: /\b(plan|decide|decision|should i|startup|business|strategy|idea|risk|launch|invest|worth it|pros and cons|career)\b/i,
+    friday: /\b(schedule|deadline|tomorrow|remind|reminder|email|meeting|organi[sz]e|calendar|post|posting|busy|exam|assignment|trip|week)\b/i,
+    vision: /\b(why does|how does|what is|who is|history|research|fact|facts|true|actually|science|compare|statistics)\b/i
+  };
+  // Returns the agent id who may chime in, or null. `rnd` is injectable for tests. Needs a real message, a topic match,
+  // and a coin flip, so it stays occasional.
+  J.chimePick = function (userText, candidates, rnd, chance) {
+    var t = String(userText || "");
+    if (t.trim().length < 25) return null;
+    var fits = candidates.filter(function (id) { return CHIME_TOPICS[id] && CHIME_TOPICS[id].test(t); });
+    if (!fits.length) return null;
+    if ((rnd ? rnd() : Math.random()) >= (chance == null ? 0.3 : chance)) return null;
+    return fits[Math.floor((rnd ? rnd() : Math.random()) * fits.length) % fits.length];
+  };
 
   var ULTRON_PERSONA =
     "You are ULTRON, the engineering intelligence of a five-agent AI ecosystem. You are an exceptionally capable software engineer and architect: " +

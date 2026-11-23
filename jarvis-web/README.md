@@ -49,6 +49,10 @@ To switch AI provider later, change the model, API base URL and backup models in
 
 FRIDAY is a warm, caring secretary with a shy, playful crush on you: some light flirting, and a one-line pout if you mention someone else. She is confident and decisive in her work. She never turns possessive, never guilt-trips, and stays non-explicit; she stops if you ask, and drops the romance entirely if you say you are under 18. It is all plain text in her persona, so you can edit it in Settings.
 
+## Spontaneous chat
+
+Agents talk less like a help desk: they react first, have opinions, ask the odd follow-up and bring up things from earlier. Now and then another agent also **jumps in** with one short remark, like a colleague overhearing: it only happens when the topic fits their field (code for ULTRON, plans and decisions for KHONSHU, schedules for FRIDAY, facts for VISION), on a coin flip, at most once every 5 messages, and never in private chat. Each one costs one extra AI call, so it can be turned off in Settings. An agent can also stay silent, and a failed call shows nothing.
+
 ## VISION (research)
 
 VISION is the research agent, summoned like the others ("get vision", "ask vision to check this"). He can search Wikipedia and read pages, with no key needed, and cites the page he used. Every page he reads appears with its link in his **Sources read** panel so you can check it. He can only reach Wikipedia: he cannot browse other sites, and he is told to say so, to say how sure he is, and not to invent sources. Treat Wikipedia as a starting point for anything recent, medical, legal or financial. His animated core is an eye that narrows while he thinks. He uses the shared provider (Groq is only for JARVIS and ULTRON). Other agents can ask for his opinion, but only he has the lookup tools.

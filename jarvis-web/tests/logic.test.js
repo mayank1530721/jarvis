@@ -326,6 +326,17 @@ test("FRIDAY is a full agent: online, she/her, female voice, summoned by name", 
 });
 
 
+
+test("chimePick: needs a real message, a topic match and the coin flip; picks only agents who fit", () => {
+  const all = ["ultron", "khonshu", "friday", "vision"], yes = () => 0.01, no = () => 0.99;
+  assert.equal(J.chimePick("my python script crashes with an error on boot", all, yes), "ultron");
+  assert.equal(J.chimePick("my python script crashes with an error on boot", all, no), null, "coin flip says no");
+  assert.equal(J.chimePick("fix the bug", all, yes), null, "too short to be worth jumping in");
+  assert.equal(J.chimePick("what did you have for lunch today my friend", all, yes), null, "no topic, no interruption");
+  assert.equal(J.chimePick("should i launch the business before my exam next week", ["khonshu", "friday"], yes) !== null, true);
+  assert.equal(J.chimePick("my python script crashes with an error on boot", ["khonshu", "friday"], yes), null, "ULTRON is not a candidate");
+  assert.match(J.STYLE, /someone in the room/);
+});
 // ---------- VISION ----------
 test("VISION is a full agent: online, own core, summoned by name, honest about what he can look up", () => {
   const v = J.AGENTS.vision;

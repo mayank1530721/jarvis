@@ -797,6 +797,30 @@
   }
 
   // ---------- chat with the model ----------
+  // Spontaneous interjection: now and then another agent adds one short, in-character remark to a conversation they were not asked into.
+  // It is occasional on purpose (topic match, a coin flip and a cooldown), costs one extra model call, and never happens in private chat.
+  const chimeOn = () => store.get("jarvis.chime", true) !== false;
+  let sinceChime = 99;
+  async function maybeChime(userText, replyText) {
+    if (S.privateChat || !chimeOn() || ++sinceChime < 5 || !replyText) return;
+    const from = S.agent, cand = J.AGENT_ORDER.filter(x => x !== from && agent(x).status === "online" && cfgFor(x).key);
+    const to = J.chimePick(userText, cand);
+    if (!to) return;
+    sinceChime = 0;
+    try {
+      const target = agent(to);
+      const sys = J.prefs.get(to).persona + "\n" + J.STYLE + "\nYou are overhearing a conversation between the user and " + agent(from).name + " and may jump in with ONE short, natural remark (at most 40 words, plain text, no lists). Only speak if you have something genuinely useful, funny or in character to add from your own specialty; otherwise reply with exactly: PASS. Do not repeat what " + agent(from).name + " already said, do not give orders, and do not address " + agent(from).name + " by quoting them." + (cfg().name ? "\nThe user's name is " + cfg().name + "." : "");
+      const msg = await J.model.call({ cfg: cfgFor(to), alt: altFor(to), system: sys, tools: [], status: () => {},
+        history: [{ role: "user", content: "User said: " + userText + "\n\n" + agent(from).name + " replied: " + replyText }] });
+      const line = String(msg.content || "").trim();
+      if (!line || /^pass\b/i.test(line) || S.agent !== from || S.privateChat) return;
+      add("sys", target.name + " jumps in: " + line);
+      logActivity(target.name + " jumped in", to);
+      const h = hist(from), last = h[h.length - 1];
+      if (last && last.role === "assistant" && !last.tool_calls && last.content === replyText) { last.content += "\n\n[" + target.name + " jumped in: " + line + "]"; saveHist(from); }
+      say(line, to);
+    } catch (e) { /* an interjection is a bonus; if it fails, say nothing */ }
+  }
   async function send(text) {
     text = text.trim();
     if (!text || S.busy || S.switching) return;
@@ -863,6 +887,7 @@
     S.busy = false;
     renderVitals(); renderPanels(); renderAgents();
     if (!S.speaking) setState("idle");
+    if (!S.busy) { const last = h[h.length - 1]; if (last && last.role === "assistant" && last.content) maybeChime(text, last.content); }
   }
   $("form").onsubmit = e => {
     e.preventDefault();
@@ -908,7 +933,7 @@
   }
   $("setBtn").onclick = () => {
     const c = cfg();
-    $("sKey").value = c.key; $("sGroq").value = store.get("jarvis.groqKey", ""); $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey(); $("sGithub").value = ghToken(); $("sAgentToken").value = handsToken(); $("sAgentBase").value = String(store.get("jarvis.agentBase", "") || ""); $("sRelay").value = J.uplika.relay;
+    $("sKey").value = c.key; $("sGroq").value = store.get("jarvis.groqKey", ""); $("sChime").checked = chimeOn(); $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey(); $("sGithub").value = ghToken(); $("sAgentToken").value = handsToken(); $("sAgentBase").value = String(store.get("jarvis.agentBase", "") || ""); $("sRelay").value = J.uplika.relay;
     draft = {}; draftAgent = agent().status === "online" ? S.agent : "jarvis";
     for (const id of onlineAgents()) { const p = J.prefs.get(id); draft[id] = { provider: p.provider || "shared", model: p.model, base: p.base, key: p.key, persona: p.persona, voiceURI: p.voice.voiceURI, rate: p.voice.rate, pitch: p.voice.pitch }; }
     const pick = $("sAgentPick"); pick.innerHTML = "";
@@ -938,6 +963,7 @@
   $("aProvider").onchange = () => { formToDraft(); draftToForm(); };
   $("sSave").onclick = () => {
     store.set("jarvis.groqKey", $("sGroq").value.trim());
+    store.set("jarvis.chime", $("sChime").checked);
     store.set("jarvis.uplika", $("sUplika").value.trim());
     store.set("jarvis.github", $("sGithub").value.trim());
     store.set("jarvis.agentToken", $("sAgentToken").value.trim());
