@@ -438,7 +438,7 @@
     { type: "function", function: { name: "set_timer", description: "Set a timer that alerts the user when it ends.",
         parameters: { type: "object", properties: { seconds: { type: "number" }, label: { type: "string" } }, required: ["seconds"] } } }
   ];
-  // Uplika (social posting). Only JARVIS has it for now, only once a key is saved, and every post needs the user's approval.
+  // Uplika (social posting). JARVIS and FRIDAY (her social desk) have it, only once a key is saved, and every post needs the user's approval.
   const uplikaKey = () => String(store.get("jarvis.uplika", "") || "");
   J.uplika.relay = String(store.get("jarvis.uplikaRelay", "") || "");
   const UPLIKA_TOOLS = [
@@ -503,7 +503,7 @@
     parameters: { type: "object", properties: {
       agent: { type: "string", enum: switchTargets(), description: "Which agent (lowercase id)." },
       task: { type: "string", description: "What the user wants done, in their words. Empty if they only asked for the agent." } }, required: ["agent"] } } });
-  const toolsFor = id => TOOLS.concat((id === "jarvis" && switchTargets().length) ? [SWITCH_TOOL()] : [], (id === "jarvis" && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "ultron" && ghToken()) ? GH_TOOLS : [], (id === "ultron" && handsToken()) ? HANDS_TOOLS : [], id === "vision" ? RESEARCH_TOOLS : [],
+  const toolsFor = id => TOOLS.concat((id === "jarvis" && switchTargets().length) ? [SWITCH_TOOL()] : [], ((id === "jarvis" || id === "friday") && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "ultron" && ghToken()) ? GH_TOOLS : [], (id === "ultron" && handsToken()) ? HANDS_TOOLS : [], id === "vision" ? RESEARCH_TOOLS : [],
     consultTargets(id).length ? [consultTool(id)] : []);
   // Ask before a file write or command. "Allow for this task" approves the rest of this one request (S.autoTask).
   function askHands(title, summary) {
@@ -675,6 +675,7 @@
     const c = cfg();
     let s = J.prefs.get(id).persona;
     if (id === "jarvis") s += J.ecosystemPrompt();
+    if (id === "friday" && uplikaKey()) s += "\nYou run the user's social desk through Uplika (tools uplika_accounts and uplika_publish). For a post: ask which channel if it is not clear, write the draft in the chat first, let them tweak it, and only call uplika_publish once they are happy with the text. Keep each platform's style and length in mind. Posting always needs the user's approval in a dialog, so never say something is posted until the tool result says it was submitted. You can only publish text; you cannot schedule, read comments or see analytics.";
     if (id === "jarvis" && uplikaKey()) s += "\nYou are connected to the user's social channels through Uplika (tools uplika_accounts and uplika_publish). Posting always needs the user's approval in a dialog, so never say something is posted until the tool result says it was submitted.";
     if (c.name) s += "\nThe user's name is " + c.name + ".";
     if (consultTargets(id).length) s += "\nYou can consult other available agents (" + consultTargets(id).map(x => agent(x).name).join(", ") + ") with the consult_agent tool when their specialty would really improve your answer or when the user asks you to get their view. They do not see this conversation, so put the facts and any other agent's points into the question. If you want two agents to react to each other, consult the first, then pass their answer to the second. Never claim an agent said something unless the tool result says so, and give the user your own conclusion at the end.";
