@@ -360,6 +360,7 @@ test("ULTRON's video studio: uses OpenMontage the safe way", () => {
   assert.match(t, /AGENT_GUIDE\.md/); assert.match(t, /Never ask the user to paste an API key/);
   assert.match(t, /wait for their yes/); assert.match(t, /does not record gameplay/);
   assert.match(J.AGENTS.ultron.role, /video production/);
+  assert.match(t, /NO-GPU MODE/); assert.match(t, /Never run make install-gpu/); assert.match(t, /shots\.md/); assert.match(t, /nothing good is free and unlimited/);
   const y = J.YOUTUBE_STUDIO;
   assert.match(y, /Jakeschincariol\/youtube-agent-skill/); assert.match(y, /never uploads/); assert.match(y, /fs_read the script/);
   assert.match(y, /never invent scores/); assert.match(y, /nothing was posted/);
