@@ -49,6 +49,10 @@ To switch AI provider later, change the model, API base URL and backup models in
 
 FRIDAY is a warm, caring secretary with a shy, playful crush on you: some light flirting, and a one-line pout if you mention someone else. She is confident and decisive in her work. She never turns possessive, never guilt-trips, and stays non-explicit; she stops if you ask, and drops the romance entirely if you say you are under 18. It is all plain text in her persona, so you can edit it in Settings.
 
+## Video and YouTube packs (ULTRON)
+
+With the desktop agent connected, ULTRON knows two open-source packs. **OpenMontage** (github.com/OpenMontageInc/OpenMontage) is an agent-driven video studio: he downloads it into your workspace folder, sets it up, follows its own guide, shows you the script and scene plan for approval, and renders. It needs Python 3.10+, Node.js and FFmpeg on your computer. It does not record gameplay, so for Roblox videos give him your own footage. Free tools need no keys; if you want paid providers, put the key in OpenMontage's `.env` file yourself, never in the chat. The **YouTube pack** (github.com/Jakeschincariol/youtube-agent-skill, MIT) covers hooks, titles, scripts, Shorts, chapters and retention; it needs no key and never uploads anything. Each download and install asks for your approval first, and he reads a script before running it. Note: OpenMontage's README also names github.com/calesthio/OpenMontage as its address; ULTRON uses the first one and tells you if that matters. Both are third-party software, so check them before trusting them.
+
 ## Spontaneous chat
 
 Agents talk less like a help desk: they react first, have opinions, ask the odd follow-up and bring up things from earlier. Now and then another agent also **jumps in** with one short remark, like a colleague overhearing: it only happens when the topic fits their field (code for ULTRON, plans and decisions for KHONSHU, schedules for FRIDAY, facts for VISION), on a coin flip, at most once every 5 messages, and never in private chat. Each one costs one extra AI call, so it can be turned off in Settings. An agent can also stay silent, and a failed call shows nothing.

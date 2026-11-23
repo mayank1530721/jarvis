@@ -25,6 +25,26 @@
 
   // Agents sometimes jump into a chat that is not theirs, the way a colleague overhears a conversation. Which agent fits is
   // decided here by topic, so most messages get no interruption and nobody comments on things outside their field.
+  // ULTRON's video studio. Added to his prompt only when his desktop agent is connected, because it needs to run commands and read files.
+  J.VIDEO_STUDIO =
+    "VIDEO STUDIO. The user wants you to make videos (for example Roblox videos) using OpenMontage, an open-source, agent-driven video production system (AGPLv3): https://github.com/OpenMontageInc/OpenMontage . Its own instructions do the planning, so follow them instead of improvising. " +
+    "1) Look for an OpenMontage folder in the workspace with fs_list. If it is missing, tell the user you are about to download and install it, then run: git clone https://github.com/OpenMontageInc/OpenMontage . Its README also mentions the address github.com/calesthio/OpenMontage; if the clone fails or you notice the difference, tell the user and let them choose, never switch sources silently. " +
+    "2) Check what the computer has before installing: python --version, node --version, ffmpeg -version, git --version. It needs Python 3.10+, Node.js and FFmpeg. If one is missing, tell the user plainly how to install it; do not try to reconfigure their system. Then run its setup (make setup, or the manual steps in its README when make is not available) with a long timeout, and read the output. " +
+    "3) Before making anything, read AGENT_GUIDE.md and CLAUDE.md in the OpenMontage folder with fs_read, and follow its pipelines, stage skills and tool registry. " +
+    "4) Keys: free tools work without any. Never ask the user to paste an API key in the chat; if a paid provider is wanted, tell them to put the key in the .env file on their computer themselves. State the estimated cost before anything that spends money and stay within what the user approved. " +
+    "5) Show the user the proposal, script and scene plan and wait for their yes before rendering, as OpenMontage itself requires at its approval points. " +
+    "6) OpenMontage does not record gameplay. Ask the user for their own Roblox footage (a file path in the workspace) or suggest a pipeline that does not need footage. Use only footage, music and voices the user has the right to use; prefer free or royalty-free sources. " +
+    "7) Renders can take a long time. Run long steps with a long timeout. For anything over ten minutes, start it detached with all output redirected to a log file, then check the log and the output folder with fs_read and fs_list instead of waiting on it. " +
+    "8) When done, give the path of the finished video file and what you checked about it (it exists, its size and length). Do not say it is finished until you have looked at the output folder.";
+
+  // A second pack for the user's YouTube channels (Shorts, titles, hooks, scripts). It is a folder of instruction files plus small
+  // Python tools; ULTRON uses it through his desktop agent. Nothing in it posts to YouTube: the user uploads.
+  J.YOUTUBE_STUDIO =
+    "YOUTUBE PACK. For YouTube work (titles and thumbnails, hooks, scripts, Shorts, chapters, descriptions, retention, channel audits, planning) use the open-source skill pack https://github.com/Jakeschincariol/youtube-agent-skill (MIT). It is a folder of skills/yt-*/SKILL.md instruction files plus six small Python 3 tools (hookscore.py, title.py, deadair.py, chapters.py, retention.py, swipe.py). It needs no key and never uploads or changes a YouTube account; the user uploads themselves. " +
+    "How to use it: look in the workspace with fs_list; if it is missing, tell the user and run git clone https://github.com/Jakeschincariol/youtube-agent-skill . Then fs_read the SKILL.md for the task (for example skills/yt-script/SKILL.md for a script) and follow it, and read templates/voice.md so the writing matches the user's voice; ask the user for their voice details only if that file is still the blank template. " +
+    "Before you run any of its Python tools for the first time, fs_read the script and make sure it only does what it claims (no network calls, no deleting or changing files outside its own output); if it does anything else, stop and tell the user. Run tools with python and read their real output; never invent scores or numbers, and ask the user for any figure you do not have. " +
+    "Be honest about the limits: its own notes say the hook score is a heuristic and tags barely matter. When you finish, hand over the text for the user to use and say clearly that nothing was posted.";
+
   var CHIME_TOPICS = {
     ultron: /\b(code|coding|bug|bugs|build|deploy|app|api|website|script|python|javascript|server|database|github|repo|feature|software|error|crash|fix)\b/i,
     khonshu: /\b(plan|decide|decision|should i|startup|business|strategy|idea|risk|launch|invest|worth it|pros and cons|career)\b/i,
@@ -149,7 +169,7 @@
       ]
     },
     ultron: {
-      id: "ultron", name: "ULTRON", role: "Engineering & development", status: "online",
+      id: "ultron", name: "ULTRON", role: "Engineering, development, video production & YouTube", status: "online",
       swatch: "255,58,74",
       sub: "Engineering · Development", hudL: "U.L.T.R.O.N / CORE 02", hudR: "ENGINEERING WORKSPACE",
       orbLabel: "Engineering core", placeholder: "Tell ULTRON what to build or fix...",

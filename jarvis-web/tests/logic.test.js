@@ -353,6 +353,17 @@ test("chimePick: needs a real message, a topic match and the coin flip; picks on
     assert.ok((await J.model.testKey(base, "gsk_x", "", r(429))).ok);
   });
 })();
+
+test("ULTRON's video studio: uses OpenMontage the safe way", () => {
+  const t = J.VIDEO_STUDIO;
+  assert.match(t, /github\.com\/OpenMontageInc\/OpenMontage/); assert.match(t, /calesthio/);
+  assert.match(t, /AGENT_GUIDE\.md/); assert.match(t, /Never ask the user to paste an API key/);
+  assert.match(t, /wait for their yes/); assert.match(t, /does not record gameplay/);
+  assert.match(J.AGENTS.ultron.role, /video production/);
+  const y = J.YOUTUBE_STUDIO;
+  assert.match(y, /Jakeschincariol\/youtube-agent-skill/); assert.match(y, /never uploads/); assert.match(y, /fs_read the script/);
+  assert.match(y, /never invent scores/); assert.match(y, /nothing was posted/);
+});
 // ---------- VISION ----------
 test("VISION is a full agent: online, own core, summoned by name, honest about what he can look up", () => {
   const v = J.AGENTS.vision;
