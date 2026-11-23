@@ -185,6 +185,45 @@
     }
   };
 
-  J.cores = { sphere: sphere, reactor: reactor, council: council };
+  // ---------- VISION: an eye. A slow iris with radial fibres, a pupil that narrows while he thinks, and a scan line ----------
+  var eA = 0, eScan = 0;
+  var eye = {
+    draw: function (ctx, W, H, t, dt, cur, m) {
+      eA += cur.spin * dt * m; eScan += dt * m * (.35 + cur.spin * .5);
+      var cx = W / 2, cy = H / 2 - 6, base = Math.min(W * .5, H * 1.0) * .27;
+      var pulse = 1 + cur.amp * Math.sin(TAU * cur.hz * t) * m, R = base * 1.15 * pulse;
+      var think = Math.min(1, cur.spin / 1.4);                      // 0 when calm, 1 while thinking
+      // outer ring with a gap that turns slowly
+      ctx.lineWidth = 1.6; ctx.strokeStyle = rgba(cur, .35);
+      ctx.beginPath(); ctx.arc(cx, cy, base * 1.7, eA * .5, eA * .5 + TAU * .82); ctx.stroke();
+      ctx.strokeStyle = rgba(cur, .14); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(cx, cy, base * 1.95, 0, TAU); ctx.stroke();
+      // eyelid outline (a pointed oval)
+      var ew = base * 1.9, eh = base * (.62 + .1 * Math.sin(TAU * .12 * t) * m);
+      ctx.strokeStyle = rgba(cur, .5); ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(cx - ew, cy); ctx.quadraticCurveTo(cx, cy - eh * 2, cx + ew, cy); ctx.quadraticCurveTo(cx, cy + eh * 2, cx - ew, cy); ctx.closePath(); ctx.stroke();
+      // iris: fibres that rotate, jitter a little while thinking
+      var fibres = 72;
+      for (var k = 0; k < fibres; k++) {
+        var a = eA + (k / fibres) * TAU, j = cur.jit > .0005 ? 1 + (Math.random() - .5) * cur.jit * 6 : 1;
+        var r1 = R * .42, r2 = R * (k % 3 === 0 ? 1 : .82) * j;
+        ctx.strokeStyle = rgba(cur, k % 3 === 0 ? .55 : .26); ctx.lineWidth = k % 3 === 0 ? 1.3 : .8;
+        ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); ctx.stroke();
+      }
+      ctx.strokeStyle = rgba(cur, .7); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+      // pupil narrows while thinking, with a bright core
+      var pr = R * (.36 - .12 * think) * (1 + cur.amp * .5 * Math.sin(TAU * cur.hz * t) * m);
+      var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, pr * 3.2);
+      g.addColorStop(0, "rgba(255,250,235,.95)"); g.addColorStop(.25, rgba(cur, .9)); g.addColorStop(.6, rgba(cur, .2)); g.addColorStop(1, rgba(cur, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, pr * 3.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = "rgba(8,6,2,.92)"; ctx.beginPath(); ctx.arc(cx, cy, pr * .62, 0, TAU); ctx.fill();
+      // scan line sweeping across the lens
+      var sy = cy + Math.sin(eScan) * eh * .9;
+      ctx.strokeStyle = rgba(cur, (.18 + .3 * think).toFixed(3)); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx - ew * .8, sy); ctx.lineTo(cx + ew * .8, sy); ctx.stroke();
+    }
+  };
+
+  J.cores = { sphere: sphere, reactor: reactor, council: council, eye: eye };
   if (typeof module !== "undefined" && module.exports) module.exports = J;
 })(typeof window !== "undefined" ? window : globalThis);

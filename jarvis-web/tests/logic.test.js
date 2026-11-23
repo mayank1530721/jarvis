@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const js = f => path.join(__dirname, "..", "js", f);
 
-require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("uplika.js")); require(js("github.js")); require(js("hands.js")); require(js("vault.js")); require(js("voice.js")); require(js("model.js"));
+require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("uplika.js")); require(js("github.js")); require(js("hands.js")); require(js("research.js")); require(js("cores.js")); require(js("vault.js")); require(js("voice.js")); require(js("model.js"));
 const J = globalThis.J;
 
 let passed = 0;
@@ -325,6 +325,34 @@ test("FRIDAY is a full agent: online, she/her, female voice, summoned by name", 
   assert.ok(J.AGENT_ORDER.includes("friday"));
 });
 
+
+// ---------- VISION ----------
+test("VISION is a full agent: online, own core, summoned by name, honest about what he can look up", () => {
+  const v = J.AGENTS.vision;
+  assert.equal(v.status, "online"); assert.equal(v.core, "eye"); assert.equal(typeof J.cores.eye.draw, "function");
+  assert.ok(v.ackLines.length >= 3 && v.greetings.length >= 3 && v.exitLines.length >= 2);
+  assert.equal(J.parseIntent("get vision", { pending: null, active: "jarvis" }).agent, "vision");
+  assert.match(v.persona, /never invent a source/i); assert.match(v.persona, /cannot browse other sites/i);
+  for (const st of ["idle", "listening", "thinking", "speaking"]) assert.ok(v.states[st].c.length === 3);
+  assert.match(J.ecosystemPrompt(), /VISION \(Research & intelligence\): available now/);
+});
+const wikiFetch = body => async () => ({ ok: true, status: 200, json: async () => body });
+(async () => {
+  await testAsync("research.search cleans snippets and builds links", async () => {
+    const r = await J.research.search("vision marvel", wikiFetch({ query: { search: [{ title: "Vision (Marvel Comics)", snippet: 'An <span class="searchmatch">android</span> &quot;hero&quot; &amp; more' }] } }));
+    assert.equal(r.length, 1); assert.equal(r[0].snippet, 'An android "hero" & more');
+    assert.equal(r[0].url, "https://en.wikipedia.org/wiki/Vision_(Marvel_Comics)");
+    assert.match(J.research.formatSearch(r), /1\. Vision \(Marvel Comics\)/);
+    assert.match(J.research.formatSearch([]), /No Wikipedia pages matched/);
+  });
+  await testAsync("research.read returns text and link, clips long pages, and reports a missing page as null", async () => {
+    const r = await J.research.read("Paris", wikiFetch({ query: { pages: { 7: { title: "Paris", extract: "x".repeat(9000) } } } }));
+    assert.equal(r.title, "Paris"); assert.ok(r.text.length < 6300 && /\[cut:/.test(r.text)); assert.equal(r.url, "https://en.wikipedia.org/wiki/Paris");
+    assert.equal(await J.research.read("Nope", wikiFetch({ query: { pages: { "-1": { title: "Nope", missing: "" } } } })), null);
+    await assert.rejects(() => J.research.search("  "), /No search query/);
+    await assert.rejects(() => J.research.read("Paris", async () => ({ ok: false, status: 503 })), /503/);
+  });
+})();
 // ---------- FRIDAY's personality ----------
 test("FRIDAY is a confident secretary with a shy, occasional crush, and the limits are written into her instructions", () => {
   const p = J.AGENTS.friday.persona;

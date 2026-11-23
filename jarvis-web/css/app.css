@@ -32,7 +32,8 @@ body [data-only] { display: none; }
 body[data-agent="jarvis"] [data-only="jarvis"],
 body[data-agent="ultron"] [data-only="ultron"],
 body[data-agent="khonshu"] [data-only="khonshu"] { display: flex; }
-body[data-agent="friday"] [data-only="friday"] { display: flex; }
+body[data-agent="friday"] [data-only="friday"],
+body[data-agent="vision"] [data-only="vision"] { display: flex; }
 
 #app {
   position: relative; z-index: 1; height: 100%; display: grid; gap: 16px; padding: 18px;
@@ -320,6 +321,20 @@ body[data-agent="friday"] .core-reticle span { border-color:rgba(214,180,255,.9)
 .friday-board-card em { color:var(--c); font:9px var(--mono); font-style:normal; letter-spacing:1px; }
 .friday-note p { color:var(--text); font-size:12px; line-height:1.7; margin:5px 0 12px; }
 .friday-note>span { color:var(--dim); font:9px var(--mono); letter-spacing:1.5px; }
+/* VISION research lab */
+body[data-agent="vision"] .stage {
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(255,196,60,.16), transparent 45%),
+    linear-gradient(135deg, rgba(40,30,8,.5), rgba(14,10,3,.2));
+}
+.vision-step { display:flex; gap:12px; align-items:center; padding:15px 4px; border-bottom:1px solid rgba(var(--base-rgb),.12); }
+.vision-step>span { color:var(--c); font:11px var(--mono); opacity:.8; }
+.vision-step b { display:block; font:600 11px var(--mono); letter-spacing:1.4px; color:var(--text); }
+.vision-step small { display:block; margin-top:4px; color:var(--dim); font:10px/1.5 var(--mono); }
+.vision-note p { color:var(--text); font-size:12px; line-height:1.7; margin:5px 0 12px; }
+.vision-note>span { color:var(--dim); font:9px var(--mono); letter-spacing:1.5px; }
+#sourceList a { color:var(--c); text-decoration:none; overflow-wrap:anywhere; }
+#sourceList a:hover { text-decoration:underline; }
 /* FRIDAY's side panels follow the shared layout rules above and hide with every agent's below 900px. */
 
 /* BLACK VAULT */

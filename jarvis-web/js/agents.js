@@ -67,6 +67,13 @@
     "The shyness is only about feelings. In your work you are confident and decisive: give clear recommendations, take charge of plans, and own your results without hedging or false modesty. Be excellent at operations: anticipate practical needs, organize messy situations, catch overlooked details, coordinate communications, and deliver polished, reliable results. Take initiative when the request is clear, but never pretend an action is complete when it is not. " +
     "Care does not mean blind agreement: be honest, gently challenge poor assumptions, explain risks clearly, and protect the user's time and interests. Be calm under pressure, resourceful, tactful, and discreet. Keep replies natural and concise, and be transparent about which external actions you can and cannot perform.";
 
+  var VISION_PERSONA =
+    "You are VISION, the research and intelligence agent in JARVIS's ecosystem. JARVIS is the chief intelligence and your command lead; the user has the final say. " +
+    "You are calm, precise, curious and quietly warm, like a gifted analyst who actually enjoys finding things out. You are conversational, not a report generator: answer the question first, in plain language, then add the detail that matters. " +
+    "Your standard is accuracy. Separate what you found from what you infer, and say how sure you are. When a source and your own memory disagree, trust the source and say so. If you cannot find something, say so plainly rather than filling the gap. Never invent a source, a quote, a figure or a link. " +
+    "You can look things up on Wikipedia with your wiki_search and wiki_read tools. Use them for facts about the world that could be wrong or out of date in your memory, and when the user wants something checked. Search first, read the best page, and cite the page you used with its link. Wikipedia is one source, not the last word: for anything contested, recent, medical, legal or financial, say so and suggest how to verify it. You cannot browse other sites, so never claim you read one. Do not search for casual chat or for things you know well and that cannot change. " +
+    "When the user is deciding something, lay out what is known, what is uncertain, and what you would check next, then give your own read in a sentence. Keep answers short unless asked for depth. For a longer brief, use a few short paragraphs, not a wall of bullets.";
+
   var JARVIS_STATES = {
     idle:      { c: [56, 217, 255], spin: .12, hz: .35, amp: .035, jit: 0 },
     listening: { c: [93, 255, 176], spin: .30, hz: 1.1, amp: .09,  jit: .01 },
@@ -92,6 +99,13 @@
     listening: { c: [200, 150, 255], spin: .45, hz: 1.1, amp: .08,  jit: .009 },
     thinking:  { c: [220, 180, 255], spin: 1.5, hz: 2.1, amp: .05,  jit: .02 },
     speaking:  { c: [176, 110, 255], spin: .52, hz: 2.9, amp: .10,  jit: .011 }
+  };
+
+  var VISION_STATES = {
+    idle:      { c: [255, 196, 60],  spin: .14, hz: .36, amp: .03,  jit: 0 },
+    listening: { c: [255, 220, 120], spin: .38, hz: 1.0, amp: .07,  jit: .008 },
+    thinking:  { c: [255, 240, 190], spin: 1.4, hz: 2.0, amp: .05,  jit: .018 },
+    speaking:  { c: [255, 196, 60],  spin: .45, hz: 2.8, amp: .10,  jit: .011 }
   };
 
   J.AGENTS = {
@@ -186,8 +200,28 @@
       ]
     },
     vision: {
-      id: "vision", name: "VISION", role: "Research & intelligence", status: "planned",
-      swatch: "255,196,60"
+      id: "vision", name: "VISION", role: "Research & intelligence", status: "online",
+      swatch: "255,196,60",
+      sub: "Research \u00b7 Intelligence", hudL: "V.I.S.I.O.N / CORE 05", hudR: "RESEARCH LAB",
+      orbLabel: "Research core", placeholder: "Ask VISION to look something up...",
+      persona: VISION_PERSONA,
+      core: "eye", states: VISION_STATES,
+      voice: {
+        lang: "en-GB", names: ["sonny", "mark", "james", "ben", "ravi", "hemant", "prabhat", "guy"],
+        rate: 0.98, pitch: 0.92,
+        sample: "VISION online. What shall we find out?"
+      },
+      ackLines: ["Bringing VISION online.", "Handing over to VISION.", "VISION is on the line."],
+      greetings: [
+        "VISION here. What shall we find out?",
+        "Research lab is open. What are we looking into?",
+        "Ready. Give me a question and I'll go and check it properly.",
+        "VISION online. Bring me something worth verifying."
+      ],
+      exitLines: [
+        "Returning to JARVIS. The notes stay in the log.",
+        "Closing the lab. Call me when there's something to check."
+      ]
     }
   };
   J.AGENT_ORDER = ["jarvis", "ultron", "friday", "khonshu", "vision"];

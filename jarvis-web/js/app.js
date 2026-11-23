@@ -181,6 +181,11 @@
       ["Voice out", S.speakOn ? "On" : "Off", S.speakOn ? "ok" : ""],
       ["Messages", String(userCount("khonshu"))], ["Verdicts", String(dd.count)]
     ]);
+    fillRows($("vitalsV"), [
+      ["Agent", "VISION"], ["Brain", cfgFor("vision").model], ["Link", link[0], link[1]],
+      ["Voice out", S.speakOn ? "On" : "Off", S.speakOn ? "ok" : ""],
+      ["Messages", String(userCount("vision"))], ["Sources", String(sources.length)]
+    ]);
     $("hudLink").textContent = l.warn ? l.text : "KEY SET";
     $("hudModel").textContent = c.model.length > 18 ? c.model.slice(0, 17) + "…" : c.model;
     const chip = $("sysChip"); chip.textContent = l.text; chip.dataset.s = l.warn ? "warn" : "ok";
@@ -296,7 +301,25 @@
       });
     }
   }
-  function renderPanels() { renderCode(); renderCouncil(); }
+  // VISION's source log: every page he actually read this session, newest first, so claims can be checked.
+  const sources = [];
+  function addSource(title, url) {
+    const i = sources.findIndex(x => x.url === url); if (i >= 0) sources.splice(i, 1);
+    sources.unshift({ title, url, t: clock24(new Date()) });
+    if (sources.length > 15) sources.pop();
+    renderSources();
+  }
+  function renderSources() {
+    const box = $("sourceList"); if (!box) return;
+    box.innerHTML = "";
+    if (!sources.length) { box.append(el("div", "empty", "Nothing read yet. Pages VISION reads appear here with their links.")); return; }
+    for (const s of sources) {
+      const r = el("div", "li"), a = el("a", "", s.title);
+      a.href = s.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+      r.append(el("span", "t", s.t), a); box.append(r);
+    }
+  }
+  function renderPanels() { renderCode(); renderCouncil(); renderSources(); }
   // Title, subtitle, placeholder and HUD text that belong to the active agent.
   function renderChrome() {
     const a = agent();
@@ -431,6 +454,13 @@
     return null;
   }
 
+  // Research (VISION). Reads Wikipedia only; free and read-only, so no approval is needed. Every page he reads is logged in his Sources panel.
+  const RESEARCH_TOOLS = [
+    { type: "function", function: { name: "wiki_search", description: "Search Wikipedia. Returns up to six matching page titles with a snippet and link. Use it to find the right page before reading.",
+        parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
+    { type: "function", function: { name: "wiki_read", description: "Read the text of one Wikipedia page by its exact title (as returned by wiki_search). Cite the page and its link in your answer.",
+        parameters: { type: "object", properties: { title: { type: "string" } }, required: ["title"] } } }
+  ];
   // Desktop agent (hands). Only ULTRON has it, once its token is saved. Looking is free; writing a file or running a command needs approval.
   const handsToken = () => String(store.get("jarvis.agentToken", "") || "");
   const handsBase = () => String(store.get("jarvis.agentBase", "") || "") || J.hands.DEFAULT_BASE;
@@ -459,7 +489,7 @@
     parameters: { type: "object", properties: {
       agent: { type: "string", enum: switchTargets(), description: "Which agent (lowercase id)." },
       task: { type: "string", description: "What the user wants done, in their words. Empty if they only asked for the agent." } }, required: ["agent"] } } });
-  const toolsFor = id => TOOLS.concat((id === "jarvis" && switchTargets().length) ? [SWITCH_TOOL()] : [], (id === "jarvis" && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "ultron" && ghToken()) ? GH_TOOLS : [], (id === "ultron" && handsToken()) ? HANDS_TOOLS : [],
+  const toolsFor = id => TOOLS.concat((id === "jarvis" && switchTargets().length) ? [SWITCH_TOOL()] : [], (id === "jarvis" && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "ultron" && ghToken()) ? GH_TOOLS : [], (id === "ultron" && handsToken()) ? HANDS_TOOLS : [], id === "vision" ? RESEARCH_TOOLS : [],
     consultTargets(id).length ? [consultTool(id)] : []);
   // Ask before a file write or command. "Allow for this task" approves the rest of this one request (S.autoTask).
   function askHands(title, summary) {
@@ -503,6 +533,18 @@
     });
   }
   const toolImpl = {
+    wiki_search: async ({ query }) => {
+      const list = await J.research.search(query);
+      logActivity("Searched: " + query, S.agent);
+      return J.research.formatSearch(list);
+    },
+    wiki_read: async ({ title }) => {
+      const r = await J.research.read(title);
+      if (!r) return "There is no Wikipedia page with that exact title. Use wiki_search to find the right title.";
+      logActivity("Read: " + r.title, S.agent);
+      addSource(r.title, r.url);
+      return "Source: " + r.url + "\n\n" + r.text;
+    },
     github_repos: async () => {
       const list = await J.github.repos(ghToken());
       return list.length ? list.map(r => r.name + " (" + (r.private ? "private" : "public") + ", default " + r.branch + ")").join("\n") : "The token can see no repositories. Give it access to some on GitHub.";
@@ -624,6 +666,7 @@
     if (consultTargets(id).length) s += "\nYou can consult other available agents (" + consultTargets(id).map(x => agent(x).name).join(", ") + ") with the consult_agent tool when their specialty would really improve your answer or when the user asks you to get their view. They do not see this conversation, so put the facts and any other agent's points into the question. If you want two agents to react to each other, consult the first, then pass their answer to the second. Never claim an agent said something unless the tool result says so, and give the user your own conclusion at the end.";
     if (id === "ultron" && ghToken()) s += "\nYou are connected to the user's GitHub. Your earlier limits on touching files are lifted for GitHub: use github_repos and github_read to look at their code, then github_propose_change to suggest edits. Read the relevant files first, make small focused changes with complete file contents, and never invent file contents you have not read. Every change needs the user's approval and arrives as a pull request on a new branch; you cannot merge or change the default branch. Never say a change was made until the tool result says it was.";
     if (id === "ultron" && handsToken()) s += "\nYou have hands: a desktop agent on the user's computer. Your earlier limits on running code and touching files are lifted for it. Tools: fs_list and fs_read (free, inside their workspace folder), fs_write (complete file content, needs their approval) and run_command (needs their approval). Work like a senior engineer: look before you change anything, read the files you will touch, make small focused changes, then RUN the code or the tests and read the real output. If something fails, read the error, fix the cause, and run it again; keep going until it works or you are genuinely stuck, then say exactly what is blocking you. Never claim something works unless a command output showed it. Never say a file was written until the tool result says so. Commands cannot take keyboard input and are stopped after their timeout, so use non-interactive flags. If the user declines an action, do not retry the same action; ask what they want instead. Windows is the likely system, so check before assuming Unix commands. Keep your final message short: what you did, what you ran, what the result was.";
+    if (id === "vision") s += "\nYou have wiki_search and wiki_read for Wikipedia. Pages you read are listed for the user in their Sources panel. Never say you checked something unless a tool result in this conversation shows it.";
     if (id === "ultron") {
       const p = activeProject();
       if (p) s += "\nActive project: " + p.name + (p.notes ? "\nProject notes from the user:\n" + p.notes : "");
