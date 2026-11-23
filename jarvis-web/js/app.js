@@ -136,15 +136,29 @@
     log.appendChild(d); log.scrollTop = log.scrollHeight;
     return d;
   }
+  // First run: say plainly what is missing and give the one button that fixes it. Agents can already be summoned without a key.
+  function addSetupCard() {
+    const card = el("div", "msg sys setup");
+    const title = el("b", "", "One step to get talking");
+    const p = el("p", "", "JARVIS needs a free AI key to reply. It takes a minute:");
+    const ol = el("ol", "");
+    const li1 = el("li", ""), a = el("a", "", "Get a free Gemini key"); a.href = "https://aistudio.google.com/apikey"; a.target = "_blank"; a.rel = "noopener noreferrer";
+    li1.append(a, " (sign in with Google, press Create API key).");
+    ol.append(li1, el("li", "", "Open Settings and paste it into the first field."), el("li", "", "Press Save. Your key stays in this browser."));
+    const b = el("button", "", "Open Settings"); b.type = "button"; b.onclick = () => $("setBtn").click();
+    card.append(title, p, ol, b, el("small", "", 'You can already say "get ULTRON" to see the agents arrive.'));
+    log.appendChild(card);
+  }
   function renderHistory() {
     log.innerHTML = "";
     for (const m of hist()) {
       if (m.role === "user") add("me", m.content);
       else if (m.role === "assistant" && m.content) add("ai", m.content);
     }
-    if (!hist().length) add("sys", cfg().key
-      ? "Jarvis online. Say \"Unleash ULTRON\" for engineering, or \"Unleash Khonshu\" for a hard look at a plan."
-      : "Jarvis online. Open Settings and paste your API key to chat. You can already say \"Unleash ULTRON\".");
+    if (!hist().length) {
+      if (!cfg().key) addSetupCard();
+      else if (S.agent === "jarvis") add("sys", J.timeGreeting(new Date(), cfg().name) + " Jarvis online. Say \"get ULTRON\" for engineering, \"get KHONSHU\" for a hard look at a plan, \"get FRIDAY\" to get organized, or \"get VISION\" to research something.");
+    }
   }
 
   // ---------- side panels (real data only) ----------
@@ -233,7 +247,7 @@
         const row = el("div", "agent-row" + (online ? "" : " planned"));
         row.style.setProperty("--ar", a.swatch);
         const meta = el("div", "ameta");
-        meta.append(el("div", "aname", a.name), el("div", "arole", online ? a.role + " · " + userCount(id) + " msg" : a.role + " · planned"));
+        meta.append(el("div", "aname", a.name), el("div", "arole", online ? (a.short || a.role) + " · " + userCount(id) + " msg" : a.role + " · planned"));
         row.append(el("span", "adot"), meta);
         if (id === S.agent) row.append(el("span", "atag", "Active"));
         else if (online) {
@@ -719,7 +733,7 @@
     clearPending();
     S.last = id;
     S.pending = { agent: id, task: task || "" };
-    const line = J.pick(J.lines.confirm).replace("{name}", a.name);
+    const line = J.pick(a.confirmLines && Math.random() < .6 ? a.confirmLines : J.lines.confirm).replace("{name}", a.name);
     // From the model's switch tool the line is shown but not written into the chat history, which must stay
     // "assistant tool call, then its tool result" with nothing in between.
     const r = fromTool ? { bubble: add("ai", line), spoken: say(line, "jarvis") } : agentSay("jarvis", line);
@@ -741,7 +755,8 @@
     logActivity(from.name + " stood down");
     await agentSay(S.agent, J.pick(from.exitLines || ["Standing down."]), 6000).spoken;
     await switchAgent("jarvis");
-    agentSay("jarvis", J.pick(agent("jarvis").welcomeBack));
+    const j = agent("jarvis");
+    agentSay("jarvis", J.pick(j.welcomeBackFrom && Math.random() < .5 ? j.welcomeBackFrom : j.welcomeBack).replace("{from}", from.name));
   }
   async function switchAgent(id) {
     if (S.switching || id === S.agent) return;
@@ -750,7 +765,7 @@
     J.stopSpeaking(); S.speaking = false;
     const a = agent(id), warp = $("warp");
     warp.dataset.to = id; $("warpName").textContent = a.name;
-    $("warpSub").textContent = id === "jarvis" ? "Returning to command" : a.role;
+    $("warpSub").textContent = id === "jarvis" ? "Returning to command" : (a.sub || a.role);
     warp.classList.add("on");
     await sleep(reduce ? 0 : 650);
     S.agent = id; document.body.dataset.agent = id;
@@ -759,7 +774,7 @@
     await sleep(reduce ? 0 : 550);
     warp.classList.remove("on");
     S.switching = false;
-    if (id !== "jarvis") agentSay(id, J.pick(a.greetings));
+    if (id !== "jarvis") agentSay(id, J.pick(hist(id).length && a.backLines ? a.backLines : a.greetings));
     $("box").focus();
   }
 

@@ -155,7 +155,7 @@
       id: "jarvis", name: "JARVIS", role: "Central intelligence", status: "online",
       swatch: "56,217,255",
       sub: "Central intelligence · Command", hudL: "J.A.R.V.I.S / CORE 01", hudR: "COMMAND INTERFACE",
-      orbLabel: "Voice link", placeholder: "Talk to Jarvis...",
+      orbLabel: "Voice link", placeholder: "Talk to JARVIS...",
       persona: JARVIS_PERSONA,
       core: "sphere", states: JARVIS_STATES,
       voice: {
@@ -168,13 +168,21 @@
         "I'm back. Where were we?",
         "Right, I've got the helm again. What's next?",
         "Welcome back. What are we doing?"
+      ],
+      welcomeBackFrom: [
+        "{from} is back on standby. What's next?",
+        "That's {from} done for now. What else do you need?",
+        "{from} can pick that up again whenever you like. For now, I'm here.",
+        "Handed back. {from} will remember where you left off."
       ]
     },
     ultron: {
-      id: "ultron", name: "ULTRON", role: "Engineering, development, video production & YouTube", status: "online",
+      id: "ultron", name: "ULTRON",
+      confirmLines: ["Release ULTRON? Fair warning, he will have opinions about your code.","ULTRON is the one for building. Bring him in?","Want ULTRON on this? He does not do small talk, he does results."],
+      backLines: ["Back. Where did we leave the build?","Picking the work back up. What's the status?","Right, where were we. Show me what changed."], role: "Engineering, development, video production & YouTube", short: "Engineering \u00b7 Video \u00b7 YouTube", status: "online",
       swatch: "255,58,74",
       sub: "Engineering · Development", hudL: "U.L.T.R.O.N / CORE 02", hudR: "ENGINEERING WORKSPACE",
-      orbLabel: "Engineering core", placeholder: "Tell ULTRON what to build or fix...",
+      orbLabel: "Engineering core", placeholder: "Tell ULTRON what to build...",
       persona: ULTRON_PERSONA,
       core: "reactor", states: ULTRON_STATES,
       voice: {
@@ -194,10 +202,12 @@
       ]
     },
     friday: {
-      id: "friday", name: "FRIDAY", role: "Operations & communications", status: "online",
+      id: "friday", name: "FRIDAY",
+      confirmLines: ["Want FRIDAY on this? She will keep you on schedule.","FRIDAY handles the organizing. Shall I bring her in?","Release FRIDAY? She will probably have the list ready before you finish asking."],
+      backLines: ["Hi again. Anything new on the list?","Back already? Good, I kept your place.","Oh, you came back. What do we need to sort out?"], role: "Operations & communications", status: "online",
       swatch: "176,110,255",
       sub: "Operations · Logistics", hudL: "F.R.I.D.A.Y / CORE 04", hudR: "OPERATIONS DESK",
-      orbLabel: "Operations core", placeholder: "Tell FRIDAY what to plan or organize...",
+      orbLabel: "Operations core", placeholder: "Tell FRIDAY what to plan...",
       persona: FRIDAY_PERSONA,
       core: "sphere", states: FRIDAY_STATES,
       voice: {
@@ -219,10 +229,12 @@
       ]
     },
     khonshu: {
-      id: "khonshu", name: "KHONSHU", role: "Strategy & critical thinking", status: "online",
+      id: "khonshu", name: "KHONSHU",
+      confirmLines: ["KHONSHU will tell you what you may not want to hear. Bring him in?","Want the council on this? Steven, Marc and Jake rarely agree, which is the point.","Release KHONSHU? Bring a real plan, he spots a weak one fast."],
+      backLines: ["Round two. What changed since last time?","Back so soon. Did the plan survive contact with reality?","Same plan or a new one? Lay it out."], role: "Strategy & critical thinking", status: "online",
       swatch: "236,240,248",
       sub: "Strategy \u00b7 The council", hudL: "K.H.O.N.S.H.U / CORE 03", hudR: "STRATEGY ROOM",
-      orbLabel: "Council", placeholder: "Tell Khonshu what you are planning...",
+      orbLabel: "Council", placeholder: "Tell KHONSHU your plan...",
       persona: KHONSHU_PERSONA,
       core: "council", states: KHONSHU_STATES,
       voice: {
@@ -242,10 +254,12 @@
       ]
     },
     vision: {
-      id: "vision", name: "VISION", role: "Research & intelligence", status: "online",
+      id: "vision", name: "VISION",
+      confirmLines: ["VISION can check that properly. Bring him in?","Want VISION on the research? He will show his sources.","Release VISION? He reads the pages so we do not have to guess."],
+      backLines: ["Back in the lab. Same thread, or something new?","Welcome back. The sources are still logged.","Good, I was hoping for another question. What are we checking?"], role: "Research & intelligence", status: "online",
       swatch: "255,196,60",
       sub: "Research \u00b7 Intelligence", hudL: "V.I.S.I.O.N / CORE 05", hudR: "RESEARCH LAB",
-      orbLabel: "Research core", placeholder: "Ask VISION to look something up...",
+      orbLabel: "Research core", placeholder: "Ask VISION to look it up...",
       persona: VISION_PERSONA,
       core: "eye", states: VISION_STATES,
       voice: {
@@ -314,7 +328,27 @@
       "Never claim an unavailable agent exists, that an agent said something unless the tool result says so, or that work was delegated.";
   };
 
-  J.pick = function (list) { return list[Math.floor(Math.random() * list.length)]; };
+  // Never the same line twice in a row from the same pool, so repeated actions do not sound scripted.
+  var lastPick = typeof Map !== "undefined" ? new Map() : null;
+  J.pick = function (list) {
+    if (!list || !list.length) return "";
+    var i = Math.floor(Math.random() * list.length);
+    if (lastPick && list.length > 1) {
+      if (i === lastPick.get(list)) i = (i + 1 + Math.floor(Math.random() * (list.length - 1))) % list.length;
+      lastPick.set(list, i);
+    }
+    return list[i];
+  };
+
+  // "Good evening, Boss." from the clock. Late at night it says so instead of pretending it is a normal hour.
+  J.timeGreeting = function (date, name) {
+    var h = (date || new Date()).getHours(), who = name ? ", " + name : "";
+    if (h < 5) return "Still up" + who + "? I'm here.";
+    if (h < 12) return "Good morning" + who + ".";
+    if (h < 17) return "Good afternoon" + who + ".";
+    if (h < 22) return "Good evening" + who + ".";
+    return "Late one" + who + ". I'm here.";
+  };
 
   if (typeof module !== "undefined" && module.exports) module.exports = J;
 })(typeof window !== "undefined" ? window : globalThis);

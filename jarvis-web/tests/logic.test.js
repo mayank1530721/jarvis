@@ -365,6 +365,23 @@ test("ULTRON's video studio: uses OpenMontage the safe way", () => {
   assert.match(y, /Jakeschincariol\/youtube-agent-skill/); assert.match(y, /never uploads/); assert.match(y, /fs_read the script/);
   assert.match(y, /never invent scores/); assert.match(y, /nothing was posted/);
 });
+
+test("dialogue: no immediate repeats, time-aware greetings, every agent has its own release and return lines", () => {
+  const pool = ["a", "b", "c"]; let prev = null, same = 0;
+  for (let i = 0; i < 300; i++) { const x = J.pick(pool); if (x === prev) same++; prev = x; }
+  assert.equal(same, 0, "J.pick never returns the same line twice in a row");
+  assert.equal(J.pick(["only"]), "only"); assert.equal(J.pick([]), "");
+  const at = h => J.timeGreeting(new Date(2026, 10, 24, h, 0), "Boss");
+  assert.match(at(3), /Still up, Boss/); assert.match(at(9), /Good morning, Boss/); assert.match(at(14), /Good afternoon/);
+  assert.match(at(19), /Good evening/); assert.match(at(23), /Late one/); assert.match(J.timeGreeting(new Date(2026, 10, 24, 9, 0)), /^Good morning\.$/);
+  for (const id of ["ultron", "khonshu", "friday", "vision"]) {
+    const a = J.AGENTS[id];
+    assert.ok(a.confirmLines.length >= 3 && a.backLines.length >= 3, id);
+    for (const l of a.confirmLines) assert.ok(/\?/.test(l), id + " confirm line asks a question: " + l);
+    assert.ok(a.placeholder.length <= 28, id + " placeholder fits a phone: " + a.placeholder);
+  }
+  assert.ok(J.AGENTS.jarvis.welcomeBackFrom.every(l => /\{from\}/.test(l)));
+});
 // ---------- VISION ----------
 test("VISION is a full agent: online, own core, summoned by name, honest about what he can look up", () => {
   const v = J.AGENTS.vision;

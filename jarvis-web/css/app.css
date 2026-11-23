@@ -101,7 +101,14 @@ body[data-agent="vision"] [data-only="vision"] { display: flex; }
 .agent-row.planned .adot { background: transparent; border: 1px solid rgba(var(--ar), .7); box-shadow: none; }
 .ameta { flex: 1; min-width: 0; }
 .aname { font: 600 12px var(--mono); letter-spacing: 2px; }
-.arole { font: 10px var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arole { font: 10px/1.4 var(--mono); color: var(--dim); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.msg.setup { text-align: left; max-width: 92%; border-style: solid; line-height: 1.55; }
+.msg.setup b { color: var(--c); letter-spacing: .5px; }
+.msg.setup p, .msg.setup ol { margin: 6px 0; }
+.msg.setup ol { padding-left: 20px; }
+.msg.setup a { color: var(--c); }
+.msg.setup button { margin: 6px 0; padding: 7px 14px; border: 1px solid var(--c); background: rgba(0,0,0,.35); color: var(--c); cursor: pointer; border-radius: 6px; font: inherit; letter-spacing: 1px; }
+.msg.setup small { display: block; color: var(--dim); }
 .asum, .atag { flex: none; font: 10px var(--mono); letter-spacing: 1.2px; text-transform: uppercase; }
 .asum { background: transparent; color: rgb(var(--ar)); border: 1px solid rgba(var(--ar), .55); border-radius: 6px; padding: 4px 9px; cursor: pointer; }
 .asum:hover { background: rgba(var(--ar), .14); }
@@ -283,7 +290,9 @@ dialog small { color: var(--dim); }
   .hud-readout { display: none; }
 }
 @media (max-width: 560px) {
-  .actions button { font-size: 9px; padding: 7px 3px; }
+  .top { flex-wrap: wrap; }
+  .actions { flex-wrap: wrap; min-width: 0; }
+  .actions button { flex: 1 1 28%; min-width: 0; font-size: 9px; padding: 7px 3px; }
   form { gap: 5px; }
   form button { min-width: 54px; padding: 0 9px; letter-spacing: 1px; }
   .stage { border-radius: 13px; }
