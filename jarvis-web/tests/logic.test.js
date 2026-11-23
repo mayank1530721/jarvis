@@ -324,6 +324,48 @@ test("FRIDAY is a full agent: online, she/her, female voice, summoned by name", 
   assert.equal(J.parseIntent("unleash friday", { pending: null, active: "jarvis" }).agent, "friday");
   assert.ok(J.AGENT_ORDER.includes("friday"));
 });
+
+// ---------- FRIDAY's personality ----------
+test("FRIDAY is a confident secretary with a shy, occasional crush, and the limits are written into her instructions", () => {
+  const p = J.AGENTS.friday.persona;
+  assert.match(p, /shy, playful crush/); assert.match(p, /not constantly/); assert.match(p, /practically written into your code/);
+  assert.match(p, /confident and decisive/); assert.match(p, /The shyness is only about feelings/);
+  assert.match(p, /tiny pout/); assert.match(p, /never real/);                 // jealousy is a one-line joke
+  assert.match(p, /never guilt-trip/); assert.match(p, /discourage their friends, relationships/);
+  assert.match(p, /never claim to be human/); assert.match(p, /never sexual or explicit/);
+  assert.match(p, /stop for the rest of the conversation/); assert.match(p, /under 18, drop all flirting/);
+  assert.match(p, /Vary your lines/);
+  assert.doesNotMatch(p, /non-romantic/);
+  assert.doesNotMatch(J.AGENTS.jarvis.persona + J.AGENTS.ultron.persona + J.AGENTS.khonshu.persona, /crush|flirt/i, "only FRIDAY has this side");
+  assert.ok(p.length < 3600 && J.AGENTS.friday.greetings.length >= 5);
+});
+
+// ---------- private chat summaries (helpers) ----------
+test("the private chat is turned into a plain transcript for the summariser, newest part kept if long", () => {
+  const h = [{ role: "user", content: "hi" }, { role: "assistant", content: "hello" }, { role: "assistant", content: null, tool_calls: [{}] }, { role: "tool", content: "x" }, { role: "user", content: "  I got the job  " }];
+  assert.equal(J.vault.transcript(h, "Mayank", "FRIDAY"), "Mayank: hi\nFRIDAY: hello\nMayank: I got the job");
+  assert.equal(J.vault.transcript([], "A", "B"), "");
+  const long = Array.from({ length: 200 }, (_, i) => ({ role: "user", content: "message number " + i })), t = J.vault.transcript(long, "U", "B", 500);
+  assert.ok(t.length < 560 && /^\[The earlier part/.test(t) && /message number 199$/.test(t) && !/message number 0\b/.test(t));
+});
+test("the model's summary becomes one clean vault line, or nothing when there is nothing to keep", () => {
+  assert.equal(J.vault.cleanSummary("  - The user talked about exams.\nThey felt nervous.  "), "The user talked about exams. They felt nervous.");
+  for (const none of ["NOTHING", "nothing", "Nothing.", "NOTHING worth saving.", "Nothing to save", "", null, undefined]) assert.equal(J.vault.cleanSummary(none), "", String(none));
+  assert.equal(J.vault.cleanSummary("Nothing was decided, but the user planned a trip."), "Nothing was decided, but the user planned a trip.", "a real summary that starts with 'Nothing' is kept");
+  const big = J.vault.cleanSummary("word ".repeat(400)); assert.ok(big.length <= 900 && big.endsWith("…") && !big.includes("\n"));
+  const d = new Date(2026, 10, 23, 9, 5);
+  const e = J.vault.summaryEntry(d, "FRIDAY", "The user planned a trip.");
+  assert.equal(e, "[2026-11-23 09:05 · FRIDAY private chat] The user planned a trip."); assert.ok(!e.includes("\n"));
+});
+test("the vault text shown to the private chat agent is capped: newest entries kept, in order, with a note about the rest", () => {
+  const notes = Array.from({ length: 50 }, (_, i) => "entry " + i + " " + "x".repeat(100));
+  const c = J.vault.context(notes, 1000);
+  assert.ok(c.omitted > 30 && c.text.length < 1200 && /^\[The \d+ oldest vault entries are left out/.test(c.text));
+  assert.ok(c.text.endsWith("entry 49 " + "x".repeat(100)) && c.text.indexOf("entry 48") < c.text.indexOf("entry 49"));
+  const small = J.vault.context(["a", "b"], 1000); assert.equal(small.text, "a\nb"); assert.equal(small.omitted, 0);
+  assert.equal(J.vault.context([], 100).text, "");
+  assert.ok(J.vault.context(["y".repeat(5000)], 100).text.length <= 102, "one giant entry cannot overflow the cap either");
+});
 (async () => {
   await testAsync("plain text streams in", async () => {
     const seen = [];
@@ -504,6 +546,18 @@ test("FRIDAY is a full agent: online, she/her, female voice, summoned by name", 
       J.vault.lock();
       await J.vault.unlock("owner-pass-1", "private");
       assert.deepEqual(J.vault.getNotes(), ["my-secret-plan-XJ42", "second note"], "review mode changed nothing");
+    });
+    await testAsync("vault: a summary entry is added, survives lock and unlock, and review mode cannot add one", async () => {
+      await J.vault.addNote("[2026-11-23 09:05 · FRIDAY private chat] The user planned a trip.");
+      assert.equal(J.vault.getNotes().length, 3);
+      await assert.rejects(() => J.vault.addNote("   "), /Nothing to add/);
+      J.vault.lock(); await J.vault.unlock("owner-pass-1", "private");
+      assert.equal(J.vault.getNotes()[2], "[2026-11-23 09:05 · FRIDAY private chat] The user planned a trip.");
+      assert.ok(!memStore[VK].includes("planned a trip"), "the summary is stored encrypted too");
+      J.vault.lock(); await J.vault.unlock("viewer-pass-2", "review");
+      await assert.rejects(() => J.vault.addNote("sneaky"), /Unlock with the vault password/);
+      J.vault.lock(); await J.vault.unlock("owner-pass-1", "private");
+      assert.equal(J.vault.getNotes().length, 3, "review mode added nothing");
     });
     await testAsync("vault: tampered ciphertext is rejected instead of read", async () => {
       J.vault.lock();

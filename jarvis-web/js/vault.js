@@ -81,9 +81,55 @@ async function save(n){
   v.data=await encrypt(master,n);
   writeVault(v);notes=n.slice();return true;
 }
+
+// ---- private chat summaries ----
+function two(n){return n<10?"0"+n:""+n}
+function stamp(d){return d.getFullYear()+"-"+two(d.getMonth()+1)+"-"+two(d.getDate())+" "+two(d.getHours())+":"+two(d.getMinutes())}
+var SUMMARY_PROMPT="You write short entries for a user's private memory vault. Below is a private conversation between the user and an AI assistant. Write ONE entry about it: what was talked about, anything the user decided, felt, planned or asked to be remembered, and any follow-ups. Use 2 to 6 short sentences of plain text on a single line, in the past tense, calling the person \"the user\". Include only what was actually said; do not guess, advise or add anything. Leave out passwords, card numbers and ID numbers. If the conversation has nothing worth remembering (only greetings or small talk), reply with exactly: NOTHING";
+// The conversation as plain text for the summariser. Keeps the newest part if it is long.
+function transcript(history,userName,agentName,maxChars){
+  maxChars=maxChars||14000;
+  var lines=[];
+  (history||[]).forEach(function(m){
+    if(!m||typeof m.content!=="string"||!m.content.trim())return;
+    if(m.role==="user")lines.push((userName||"User")+": "+m.content.trim());
+    else if(m.role==="assistant")lines.push((agentName||"Assistant")+": "+m.content.trim());
+  });
+  var text=lines.join("\n");
+  if(text.length<=maxChars)return text;
+  var cut=text.slice(text.length-maxChars),nl=cut.indexOf("\n");
+  return "[The earlier part of the conversation is left out.]\n"+(nl>=0&&nl<200?cut.slice(nl+1):cut);
+}
+// The model's answer as one vault line, or "" when it said there was nothing worth keeping.
+function cleanSummary(raw){
+  var t=String(raw==null?"":raw).replace(/\s*\n+\s*/g," ").replace(/^\s*[-•*]+\s*/,"").replace(/\s{2,}/g," ").trim();
+  if(!t||/^nothing(\s+(worth|to)\b.*)?[.!]?$/i.test(t))return"";
+  return t.length>900?t.slice(0,897).replace(/\s+\S*$/,"")+"…":t;
+}
+function summaryEntry(date,agentName,text){return"["+stamp(date)+" · "+agentName+" private chat] "+text}
+// What the private chat agent is shown: the newest entries that fit, oldest first, so a growing vault cannot overflow the prompt.
+function context(list,maxChars){
+  maxChars=maxChars||8000;
+  var picked=[],total=0,i;
+  for(i=list.length-1;i>=0;i--){
+    var l=String(list[i]);
+    if(l.length>maxChars)l=l.slice(0,maxChars)+"…";
+    if(picked.length&&total+l.length+1>maxChars)break;
+    picked.unshift(l);total+=l.length+1;
+  }
+  var omitted=Math.max(0,i+1);
+  return{text:(omitted>0?"[The "+omitted+" oldest vault entries are left out to save space.]\n":"")+picked.join("\n"),omitted:omitted};
+}
+async function addNote(entry){
+  if(!master||mode!=="private")throw Error("Unlock with the vault password to edit.");
+  if(typeof entry!=="string"||!entry.trim())throw Error("Nothing to add.");
+  await save(notes.concat([entry.trim()]));
+  return true;
+}
 J.vault={
   exists:function(){try{return!!readVault()}catch(e){return false}},
-  setup:setup,unlock:unlock,save:save,
+  setup:setup,unlock:unlock,save:save,addNote:addNote,
+  SUMMARY_PROMPT:SUMMARY_PROMPT,transcript:transcript,cleanSummary:cleanSummary,summaryEntry:summaryEntry,context:context,stamp:stamp,
   lock:function(){master=null;mode=null;notes=[]},
   isUnlocked:function(){return!!master},
   mode:function(){return mode},
