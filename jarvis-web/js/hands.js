@@ -86,6 +86,7 @@
       catch (e) { if (e.status === 404) return null; throw e; }
     },
     write: function (base, token, path, content) { return call(base, token, "/fs/write", { path: path, content: content }); },
+    put: function (base, token, path, url, contentType) { return call(base, token, "/fs/put", { path: path, url: url, contentType: contentType }); },
     run: function (base, token, command, cwd, timeout) { return call(base, token, "/run", { command: command, cwd: cwd || "", timeout: timeout || 60 }); }
   };
   if (typeof module !== "undefined" && module.exports) module.exports = J;

@@ -448,6 +448,11 @@
     { type: "function", function: { name: "uplika_publish", description: "Draft a social post. The user is shown the text and channels and must approve before anything is posted, so call this only when they asked to post something. Do not claim it was posted unless the result says it was.",
         parameters: { type: "object", properties: { content: { type: "string", description: "The post text exactly as it should appear." }, channels: { type: "array", items: { type: "string" }, description: "Platform names, handles or ids, e.g. [\"instagram\"]. Omit to use every active channel." } }, required: ["content"] } } }
   ];
+  // Video posting: FRIDAY only, needs the Uplika key and the desktop agent (it reads the clip and uploads it).
+  const VIDEO_TOOL = { type: "function", function: { name: "uplika_publish_video", description: "Post a video clip from the clips folder (use fs_list-style names from clips_list) with its caption. The user sees the caption, channels and file and must approve first. Do not claim it was posted unless the result says it was.",
+      parameters: { type: "object", properties: { file: { type: "string", description: "Path of the .mp4/.mov/.webm inside the workspace, e.g. clips/clip1.mp4" }, content: { type: "string", description: "Caption/description with hashtags, exactly as it should appear." }, title: { type: "string", description: "YouTube title (max 100 chars), used when posting to YouTube." }, channels: { type: "array", items: { type: "string" } } }, required: ["file", "content"] } } };
+  const CLIPS_TOOL = { type: "function", function: { name: "clips_list", description: "List the video clips (.mp4/.mov/.webm) in a workspace folder, default 'clips'. Use this to see what the user has ready to post.",
+      parameters: { type: "object", properties: { folder: { type: "string" } } } } };
   // GitHub (code). Only ULTRON has it, once a token is saved. Reading is free; every change needs approval and lands on a new branch as a pull request.
   const ghToken = () => String(store.get("jarvis.github", "") || "");
   const GH_TOOLS = [
@@ -505,7 +510,7 @@
     parameters: { type: "object", properties: {
       agent: { type: "string", enum: switchTargets(), description: "Which agent (lowercase id)." },
       task: { type: "string", description: "What the user wants done, in their words. Empty if they only asked for the agent." } }, required: ["agent"] } } });
-  const toolsFor = id => TOOLS.concat((id === "jarvis" && switchTargets().length) ? [SWITCH_TOOL()] : [], ((id === "jarvis" || id === "friday") && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "ultron" && ghToken()) ? GH_TOOLS : [], (id === "ultron" && handsToken()) ? HANDS_TOOLS : [], id === "vision" ? RESEARCH_TOOLS : [],
+  const toolsFor = id => TOOLS.concat((id === "jarvis" && switchTargets().length) ? [SWITCH_TOOL()] : [], ((id === "jarvis" || id === "friday") && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "friday" && uplikaKey() && handsToken()) ? [CLIPS_TOOL, VIDEO_TOOL] : [], (id === "ultron" && ghToken()) ? GH_TOOLS : [], (id === "ultron" && handsToken()) ? HANDS_TOOLS : [], id === "vision" ? RESEARCH_TOOLS : [],
     consultTargets(id).length ? [consultTool(id)] : []);
   // Ask before a file write or command. "Allow for this task" approves the rest of this one request (S.autoTask).
   function askHands(title, summary) {
@@ -641,6 +646,32 @@
       const res = await J.uplika.publish(key, approved, targets.map(a => a.id));
       logActivity("Posted to " + targets.length + " channel(s)", S.agent);
       return "Submitted to Uplika for " + targets.map(a => a.platform + " " + a.handle).join(", ") + ". Uplika response: " + JSON.stringify(res).slice(0, 300);
+    },
+    clips_list: async ({ folder }) => {
+      const dir = String(folder || "clips").replace(/^\/+|\/+$/g, "");
+      let r;
+      try { r = await J.hands.list(handsBase(), handsToken(), dir); } catch (e) { return "Could not open the '" + dir + "' folder: " + e.message; }
+      const vids = r.entries.filter(e => e.type === "file" && J.uplika.videoType(e.name));
+      return vids.length ? vids.map(e => dir + "/" + e.name + " (" + Math.round((e.size || 0) / 1048576 * 10) / 10 + " MB)").join("\n") : "No video clips in '" + dir + "'. Ask the user to export their clips there.";
+    },
+    uplika_publish_video: async ({ file, content, title, channels }) => {
+      const key = uplikaKey(), path = String(file || "").trim();
+      if (!path || !J.uplika.videoType(path)) return "Give the path of an .mp4, .mov or .webm clip.";
+      if (!content || !String(content).trim()) return "No caption was given.";
+      const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+      let size;
+      try { const r = await J.hands.list(handsBase(), handsToken(), dir); const e = r.entries.find(x => x.name === path.split("/").pop()); size = e && e.size; }
+      catch (err) { return "Could not look at the clip: " + err.message; }
+      if (!size) return "That clip was not found or is empty. Nothing was posted.";
+      const targets = J.uplika.resolve(await J.uplika.accounts(key), channels);
+      if (!targets.length) return "No matching active channel. Nothing was posted.";
+      const approved = await askApproval("[Video: " + path + "]\n\n" + String(content), targets.map(a => a.platform + " " + a.handle).join(", "));
+      if (!approved) { logActivity("Video post cancelled", S.agent); return "The user declined, so nothing was posted."; }
+      const text = String(approved).replace(/^\[Video: [^\]]*\]\s*/, "");
+      const res = await J.uplika.publishVideo(key, { fileName: path, bytes: size, content: text, title: title, accountIds: targets.map(a => a.id), platforms: targets.map(a => a.platform.toLowerCase()),
+        putFile: (url, type) => J.hands.put(handsBase(), handsToken(), path, url, type) });
+      logActivity("Posted video to " + targets.length + " channel(s)", S.agent);
+      return "Video submitted to Uplika for " + targets.map(a => a.platform + " " + a.handle).join(", ") + ". Uplika response: " + JSON.stringify(res).slice(0, 300);
     },
     get_time: () => new Date().toString(),
     open_website: ({ url }) => {
@@ -791,7 +822,7 @@
     const c = cfg();
     let s = J.prefs.get(id).persona;
     if (id === "jarvis") s += J.ecosystemPrompt();
-    if (id === "friday" && uplikaKey()) s += "\nYou run the user's social desk through Uplika (tools uplika_accounts and uplika_publish). For a post: ask which channel if it is not clear, write the draft in the chat first, let them tweak it, and only call uplika_publish once they are happy with the text. Keep each platform's style and length in mind. Posting always needs the user's approval in a dialog, so never say something is posted until the tool result says it was submitted. You can only publish text; you cannot schedule, read comments or see analytics.";
+    if (id === "friday" && uplikaKey()) s += "\nYou run the user's social desk through Uplika (tools uplika_accounts and uplika_publish). For a post: ask which channel if it is not clear, write the draft in the chat first, let them tweak it, and only call uplika_publish once they are happy with the text. Keep each platform's style and length in mind. Posting always needs the user's approval in a dialog, so never say something is posted until the tool result says it was submitted. You can publish text; you cannot schedule, read comments or see analytics." + (handsToken() ? " You can also post video clips: clips_list shows what is in the user's clips folder, you write the caption (and a YouTube title) for each clip to the campaign rules the user gave you, and uplika_publish_video posts it after their approval. You cannot open or edit videos, and only post clips the user says they have the right to post." : "");
     if (id === "jarvis" && uplikaKey()) s += "\nYou are connected to the user's social channels through Uplika (tools uplika_accounts and uplika_publish). Posting always needs the user's approval in a dialog, so never say something is posted until the tool result says it was submitted.";
     if (c.name) s += "\nThe user's name is " + c.name + ".";
     if (consultTargets(id).length) s += "\nYou can consult other available agents (" + consultTargets(id).map(x => agent(x).name).join(", ") + ") with the consult_agent tool when their specialty would really improve your answer or when the user asks you to get their view. They do not see this conversation, so put the facts and any other agent's points into the question. If you want two agents to react to each other, consult the first, then pass their answer to the second. Never claim an agent said something unless the tool result says so, and give the user your own conclusion at the end.";

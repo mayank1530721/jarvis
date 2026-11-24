@@ -791,6 +791,18 @@ test("the vault text shown to the private chat agent is capped: newest entries k
     assert.ok(hits.length >= 1 && hits.every(u => u.includes("groq")), hits.join(","));
   });
 
+  await testAsync("video post: presign, agent upload, complete, then post with media id and YouTube title", async () => {
+    const calls = [];
+    globalThis.fetch = async (u, o) => { calls.push((o.method || "GET") + " " + u.replace(/^.*\/v1/, "") + " " + (o.body || "")); const id = u.endsWith("/media/presign");
+      return { ok: true, status: 200, json: async () => id ? { id: "m1", uploadUrl: "https://up.example/x" } : { ok: true } }; };
+    let put = null;
+    await J.uplika.publishVideo("k", { fileName: "clips/a.MP4", bytes: 10, content: "hi #x", title: "T", accountIds: ["a1"], platforms: ["youtube"], putFile: async (u, t) => { put = [u, t]; } });
+    assert.deepEqual(put, ["https://up.example/x", "video/mp4"]);
+    assert.match(calls[0], /POST \/media\/presign .*"fileName":"a.MP4".*"bytes":10/);
+    assert.match(calls[1], /POST \/media\/m1\/complete/);
+    assert.match(calls[2], /POST \/posts .*"mediaIds":\["m1"\].*"youtube":\{"title":"T"\}/);
+    await assert.rejects(() => J.uplika.publishVideo("k", { fileName: "a.avi", bytes: 5, putFile: async () => {} }), /mp4/);
+  });
 
   console.log(process.exitCode ? "\nSome checks FAILED." : "\nAll " + passed + " checks passed.");
 })();

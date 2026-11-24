@@ -152,6 +152,36 @@ def _kill_tree(proc):
             pass
 
 
+VIDEO_TYPES = {".mp4": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm"}
+
+
+def do_put(root, rel, url, content_type):
+    """Send one workspace video file to a presigned https upload URL (used for Uplika). No auth header is added."""
+    import urllib.request, urllib.error
+    full = resolve_in_workspace(root, rel)
+    if not os.path.isfile(full):
+        raise ApiError(404, "No such file.")
+    ext = os.path.splitext(full)[1].lower()
+    if ext not in VIDEO_TYPES:
+        raise ApiError(400, "Only .mp4, .mov and .webm files can be uploaded.")
+    if not isinstance(url, str) or not url.startswith("https://"):
+        raise ApiError(400, "The upload address must be https.")
+    if content_type != VIDEO_TYPES[ext]:
+        raise ApiError(400, "Content type must be %s for %s files." % (VIDEO_TYPES[ext], ext))
+    size = os.path.getsize(full)
+    with open(full, "rb") as f:
+        req = urllib.request.Request(url, data=f, method="PUT",
+                                     headers={"Content-Type": content_type, "Content-Length": str(size)})
+        try:
+            with urllib.request.urlopen(req, timeout=600) as r:
+                status = r.status
+        except urllib.error.HTTPError as e:
+            raise ApiError(502, "Upload refused with status %s." % e.code)
+        except Exception as e:
+            raise ApiError(502, "Upload failed: %s" % e)
+    return {"ok": True, "bytes": size, "status": status, "contentType": content_type}
+
+
 def do_run(root, command, cwd_rel="", timeout=None):
     if not isinstance(command, str) or not command.strip():
         raise ApiError(400, "Give a command.")
@@ -254,7 +284,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {
                 "ok": True, "service": "JARVIS Desktop Agent", "version": VERSION,
                 "uptime_seconds": round(time.time() - self.server.started),
-                "capabilities": ["health", "status", "fs.list", "fs.read", "fs.write", "run"],
+                "capabilities": ["health", "status", "fs.list", "fs.read", "fs.write", "fs.put", "run"],
                 "execution_enabled": True, "workspace": self.server.root
             })
             return
@@ -273,6 +303,8 @@ class Handler(BaseHTTPRequestHandler):
                 out = do_read(root, data.get("path", ""), data.get("max_bytes"))
             elif self.path == "/fs/write":
                 out = do_write(root, data.get("path", ""), data.get("content"))
+            elif self.path == "/fs/put":
+                out = do_put(root, data.get("path", ""), data.get("url"), data.get("contentType"))
             elif self.path == "/run":
                 out = do_run(root, data.get("command"), data.get("cwd", ""), data.get("timeout"))
             else:
