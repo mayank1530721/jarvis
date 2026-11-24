@@ -382,6 +382,17 @@ test("dialogue: no immediate repeats, time-aware greetings, every agent has its 
   }
   assert.ok(J.AGENTS.jarvis.welcomeBackFrom.every(l => /\{from\}/.test(l)));
 });
+
+test("ULTRON roasts with limits; FRIDAY's warmth is honest about being an AI", () => {
+  const u = J.AGENTS.ultron.persona;
+  assert.match(u, /Hinglish/); assert.match(u, /ALWAYS give the correct, working answer/); assert.match(u, /never their family, looks, body/);
+  assert.match(u, /no slurs/); assert.match(u, /drop the act completely/); assert.match(u, /never put insults in code/);
+  assert.ok(J.AGENTS.ultron.greetings.length >= 4 && J.AGENTS.ultron.exitLines.length >= 3);
+  const f = J.AGENTS.friday.persona;
+  assert.match(f, /remember specifics/); assert.match(f, /you are an AI/); assert.match(f, /never pretend to be human/);
+  assert.match(f, /never make them feel guilty for being away/); assert.match(f, /under 18, drop all flirting/); assert.match(f, /never sexual or explicit/);
+  assert.match(f, /never guilt-trip/); assert.match(f, /Never swear love or exclusivity/);
+});
 // ---------- VISION ----------
 test("VISION is a full agent: online, own core, summoned by name, honest about what he can look up", () => {
   const v = J.AGENTS.vision;
@@ -421,7 +432,7 @@ test("FRIDAY is a confident secretary with a shy, occasional crush, and the limi
   assert.match(p, /Vary your lines/);
   assert.doesNotMatch(p, /non-romantic/);
   assert.doesNotMatch(J.AGENTS.jarvis.persona + J.AGENTS.ultron.persona + J.AGENTS.khonshu.persona, /crush|flirt/i, "only FRIDAY has this side");
-  assert.ok(p.length < 3600 && J.AGENTS.friday.greetings.length >= 5);
+  assert.ok(p.length < 4800 && J.AGENTS.friday.greetings.length >= 5);
 });
 
 // ---------- private chat summaries (helpers) ----------
