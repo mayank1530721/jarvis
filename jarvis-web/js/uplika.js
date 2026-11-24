@@ -52,6 +52,25 @@
   async function accounts(key) { return normalizeAccounts(await call(key, "GET", "/accounts")); }
   async function publish(key, content, accountIds) { return call(key, "POST", "/posts", { content: content, accountIds: accountIds }); }
 
+  var VIDEO_TYPES = { mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm" };
+  function videoType(name) { var m = /\.([a-z0-9]+)$/i.exec(String(name || "")); return m ? (VIDEO_TYPES[m[1].toLowerCase()] || "") : ""; }
+  function baseName(p) { return String(p || "").replace(/\\/g, "/").split("/").pop(); }
+  // Video post: presign -> the desktop agent PUTs the file -> complete -> post with the media id.
+  // putFile(uploadUrl, contentType) is supplied by the page (it asks the desktop agent, since a browser can't read the file).
+  async function publishVideo(key, o) {
+    var type = videoType(o.fileName);
+    if (!type) throw new Error("Only .mp4, .mov or .webm videos can be posted.");
+    if (!o.bytes) throw new Error("The video file looks empty.");
+    var pre = await call(key, "POST", "/media/presign", { fileName: baseName(o.fileName), contentType: type, bytes: o.bytes });
+    if (!pre || !pre.id || !pre.uploadUrl) throw new Error("Uplika did not give an upload address.");
+    await o.putFile(pre.uploadUrl, type);
+    await call(key, "POST", "/media/" + encodeURIComponent(pre.id) + "/complete", {});
+    var body = { content: o.content || "", accountIds: o.accountIds, mediaIds: [pre.id] };
+    var yt = (o.platforms || []).indexOf("youtube") >= 0;
+    if (yt) body.options = { youtube: { title: String(o.title || o.content || "Video").slice(0, 100) } };
+    return call(key, "POST", "/posts", body);
+  }
+
   // Which accounts the user meant: ids, platform names or handles. No names given = every active account.
   function resolve(all, wanted) {
     var active = all.filter(function (a) { return a.status === "active" && (!a.health || a.health === "ok" || a.health === "expiring"); });
@@ -60,6 +79,6 @@
     return active.filter(function (a) { return w.indexOf(a.id.toLowerCase()) >= 0 || w.indexOf(a.platform.toLowerCase()) >= 0 || w.indexOf(a.handle.toLowerCase().replace(/^@/, "")) >= 0; });
   }
 
-  J.uplika = { BASE: BASE, relay: "", base: base, normalizeAccounts: normalizeAccounts, explain: explain, resolve: resolve, accounts: accounts, publish: publish };
+  J.uplika = { BASE: BASE, relay: "", base: base, normalizeAccounts: normalizeAccounts, explain: explain, resolve: resolve, accounts: accounts, publish: publish, publishVideo: publishVideo, videoType: videoType };
   if (typeof module !== "undefined" && module.exports) module.exports = J;
 })(typeof window !== "undefined" ? window : globalThis);

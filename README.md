@@ -42,3 +42,10 @@ The bot works only while the computer is on and this window is open.
 Free hosts change their rules often, so check the current terms before signing up. Fly.io asks for a credit card. Render's free web service goes to sleep when idle, which works with this bot: set `WEBHOOK_URL` to your Render address and Telegram wakes it when you message it. Expect the first reply after a quiet spell to be slow.
 
 On the host, set the same values from `.env.example` as environment variables, use `pip install -r requirements.txt` to build and `python bot.py` to start.
+
+## Clips to posts (FRIDAY)
+Miniclips is a window-only Windows app and has no command line, API or watch folder that I could find, so the agents cannot click inside it. You do that one step: make clips in Miniclips and export them into the `clips` folder of the desktop agent's workspace. From there:
+- FRIDAY lists the clips (`clips_list`), writes a caption and YouTube title for each to the campaign rules you give her, and posts with `uplika_publish_video`.
+- The post dialog shows the file, caption and channels. Nothing is uploaded or posted until you approve.
+- The video never passes through the browser: Jarvis asks Uplika for an upload address, the desktop agent sends the file to it (`/fs/put`, mp4/mov/webm only, https only), then Jarvis completes the upload and posts.
+- Needs the Uplika key and the desktop agent token. Only post clips you have the right to post, such as ones from campaigns that allow it.
