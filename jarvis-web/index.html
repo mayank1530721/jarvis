@@ -21,6 +21,7 @@
       <button id="agentsBtn">Agents</button>
       <button id="speakBtn" title="Speak replies aloud">Voice: off</button>
       <button id="memBtn">Memory</button>
+      <button id="missionBtn" title="Give the whole team one goal and get one brief back">Mission</button>
       <button id="vaultBtn">Black Vault</button>
       <button id="privEnd" hidden title="End this private chat and save a summary of it to your Black Vault">End private chat</button>
       <button id="setBtn">Settings</button>
@@ -212,10 +213,28 @@
 <div class="drow"><button id="vaultLock" type="button">Lock vault</button></div></dialog>
 <dialog id="memory">
   <h3>What Jarvis remembers</h3>
-  <small>Shared by every agent. One fact per line. Say "remember that..." to Jarvis, or edit here.</small>
+  <small>Shared by every agent. One fact per line. Say "remember that..." to Jarvis, or edit here. Agents also save lasting facts on their own, skipping duplicates. Start a line with ★ to pin it so it is always sent; with hundreds of facts only the pinned and most relevant ones are sent each time.</small>
   <label>Memories</label>
   <textarea id="mText" style="min-height:200px"></textarea>
+  <div class="drow" style="justify-content:flex-start"><button id="mExport" type="button">Export</button><label class="filebtn">Import<input type="file" id="mImport" accept=".json,.txt" hidden></label></div>
+  <small id="mMsg"></small>
+  <details><summary>Notes from old conversations</summary><div id="mSums"></div></details>
   <div class="drow"><button id="mCancel" type="button">Cancel</button><button class="primary" id="mSave" type="button">Save</button></div>
+</dialog>
+
+<dialog id="missionDlg">
+  <h3>Mission</h3>
+  <small>Give the team one goal. Each agent adds their part in turn, reading what the others wrote, and JARVIS ends with one brief you can copy or download. Every step is one AI call.</small>
+  <label>Goal</label>
+  <textarea id="mGoal" style="min-height:70px" placeholder="e.g. Should I start a gaming clips channel, and how would I start this month?"></textarea>
+  <label>Who works on it</label>
+  <div id="mSteps"></div>
+  <div class="drow" style="justify-content:flex-start"><button class="primary" id="mRun" type="button">Start mission</button><button id="mStop" type="button" hidden>Stop</button><small id="mCost"></small></div>
+  <div id="mProgress"></div>
+  <pre id="mResult" hidden></pre>
+  <div class="drow" id="mActions" hidden style="justify-content:flex-start"><button id="mCopy" type="button">Copy</button><button id="mDownload" type="button">Download .md</button></div>
+  <details id="mPastBox" hidden><summary>Past missions</summary><div id="mPast"></div></details>
+  <div class="drow"><button class="primary" id="mClose" type="button">Close</button></div>
 </dialog>
 
 <dialog id="agentsDlg">
@@ -244,6 +263,8 @@
 <script src="js/github.js"></script>
 <script src="js/hands.js"></script>
 <script src="js/research.js"></script>
+<script src="js/memory.js"></script>
+<script src="js/mission.js"></script>
 <script src="js/voice.js"></script>
 <script src="js/model.js"></script>
 <script src="js/cores.js"></script>

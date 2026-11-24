@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const js = f => path.join(__dirname, "..", "js", f);
 
-require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("uplika.js")); require(js("github.js")); require(js("hands.js")); require(js("research.js")); require(js("cores.js")); require(js("vault.js")); require(js("voice.js")); require(js("model.js"));
+require(js("util.js")); require(js("agents.js")); require(js("intent.js")); require(js("council.js")); require(js("uplika.js")); require(js("github.js")); require(js("hands.js")); require(js("research.js")); require(js("memory.js")); require(js("mission.js")); require(js("cores.js")); require(js("vault.js")); require(js("voice.js")); require(js("model.js"));
 const J = globalThis.J;
 
 let passed = 0;
@@ -393,6 +393,72 @@ test("ULTRON roasts with limits; FRIDAY's warmth is honest about being an AI", (
   assert.match(f, /never make them feel guilty for being away/); assert.match(f, /under 18, drop all flirting/); assert.match(f, /never sexual or explicit/);
   assert.match(f, /never guilt-trip/); assert.match(f, /Never swear love or exclusivity/);
 });
+
+test("long memory: select sends pinned + relevant + newest facts, not everything", () => {
+  const facts = []; for (let i = 0; i < 200; i++) facts.push("Random fact number " + i + " about weather and nothing else");
+  facts[40] = "Mayank is building the JARVIS assistant with the Groq API";
+  facts[7] = J.memory.PIN + "Always answer in short sentences";
+  facts[120] = "Exam for maths is on Friday";
+  const pick = J.memory.select(facts, "can you help with my maths exam?", 10);
+  assert.ok(pick.length <= 10 && pick.includes(facts[120]), "relevant fact found among 200");
+  assert.ok(pick.includes(facts[7]), "pinned fact is always sent");
+  assert.ok(pick.includes(facts[199]), "newest fact fills spare room");
+  assert.equal(J.memory.select(["a fact here", "another fact"], "x", 10).length, 2, "small memory is sent whole");
+  assert.deepEqual(J.memory.select(facts, "groq api jarvis", 3).includes(facts[40]), true);
+  const big = ["x".repeat(900), "y".repeat(900), "z".repeat(900), "w".repeat(900), "v".repeat(900)];
+  assert.ok(J.memory.select(big, "", 30, 2000).join("").length <= 2000);
+});
+test("long memory: add skips duplicates and near-duplicates, caps size, keeps pinned", () => {
+  let f = [];
+  let r = J.memory.add(f, "User likes dark mode in every app"); assert.equal(r.status, "saved"); f = r.facts;
+  assert.equal(J.memory.add(f, "user likes dark mode in every app!").status, "duplicate");
+  assert.equal(J.memory.add(f, "The user likes dark mode in every single app").status, "duplicate");
+  assert.equal(J.memory.add(f, "User has a maths exam on Friday").status, "saved");
+  assert.equal(J.memory.add(f, "   ").status, "empty");
+  let g = [J.memory.PIN + "pinned one", "old a", "old b"];
+  g = J.memory.add(g, "brand new unrelated fact here", 3).facts;
+  assert.deepEqual(g, [J.memory.PIN + "pinned one", "old b", "brand new unrelated fact here"], "oldest unpinned dropped at the cap");
+  const m = J.memory.merge(["User likes dark mode in every app"], ["user likes dark mode in every app", "New thing about cricket scores"]);
+  assert.equal(m.added, 1); assert.equal(m.skipped, 1);
+});
+test("long memory: summary helpers cut on a user message and ignore tool traffic", () => {
+  const h = []; for (let i = 0; i < 20; i++) { h.push({ role: "user", content: "q" + i }); h.push({ role: "assistant", content: "a" + i }); }
+  const cut = J.memory.splitPoint(h, 10);
+  assert.equal(cut, 30); assert.equal(h[cut].role, "user");
+  assert.equal(J.memory.splitPoint(h.slice(0, 8), 10), 0, "short history is not cut");
+  const t = J.memory.transcript([{ role: "user", content: "hi" }, { role: "assistant", content: null, tool_calls: [{}] }, { role: "tool", content: "secret output" }, { role: "assistant", content: "hello" }], "Boss", "JARVIS");
+  assert.equal(t, "Boss: hi\nJARVIS: hello");
+  assert.equal(J.memory.cleanSummary("```\n- one\n- two\n```"), "- one\n- two");
+  assert.match(J.memory.SUMMARY_PROMPT, /Never invent/);
+});
+
+(async () => {
+  const base = { nameOf: id => id.toUpperCase(), research: async () => ({ title: "Paris", url: "https://en.wikipedia.org/wiki/Paris", text: "Paris is the capital of France." }) };
+  await testAsync("mission: steps run in order, each reads the earlier notes, then JARVIS writes the brief", async () => {
+    const seen = [];
+    const r = await J.mission.run({ ...base, goal: "Plan a trip to Paris", ask: async (st, msg) => { seen.push([st.id, msg]); return "notes from " + st.id; }, synth: async (sys, msg) => { seen.push(["synth", msg]); return "FINAL BRIEF"; } });
+    assert.deepEqual(seen.map(x => x[0]), ["vision", "khonshu", "friday", "synth"], "ULTRON is off by default");
+    assert.match(seen[0][1], /Wikipedia notes \(Paris/); assert.match(seen[0][1], /Paris is the capital/);
+    assert.ok(!/NOTES SO FAR/.test(seen[0][1])); assert.match(seen[1][1], /notes from vision/); assert.match(seen[2][1], /notes from khonshu/);
+    assert.match(seen[3][1], /notes from friday/); assert.equal(r.brief, "FINAL BRIEF"); assert.equal(r.sources[0].url, "https://en.wikipedia.org/wiki/Paris");
+    const md = J.mission.toMarkdown(r, new Date("2026-11-25T00:00:00Z"));
+    assert.match(md, /^# Mission brief\n\n\*2026-11-25\*\n\nFINAL BRIEF/); assert.match(md, /### Plan \(FRIDAY\)/); assert.match(md, /\[Paris\]\(https:\/\/en\.wikipedia\.org/);
+  });
+  await testAsync("mission: a failing agent does not stop the others; no wiki page is said plainly; cancel and empty goal handled", async () => {
+    let n = 0;
+    const r = await J.mission.run({ ...base, research: async () => null, goal: "Learn guitar", stepIds: ["vision", "khonshu", "ultron"], ask: async (st, msg) => { if (st.id === "khonshu") throw new Error("busy"); if (st.id === "vision") assert.match(msg, /No Wikipedia page was found/); return "ok " + st.id; },
+      synth: async (sys, msg) => { assert.match(msg, /missing: busy/); return "brief"; } });
+    assert.equal(r.sections.length, 3); assert.equal(r.sections[1].error, "busy"); assert.equal(r.brief, "brief"); assert.equal(r.sources.length, 0);
+    assert.match(J.mission.toMarkdown(r), /_Missing: busy_/);
+    const all = await J.mission.run({ ...base, goal: "x", ask: async () => { throw new Error("down"); }, synth: async () => { throw new Error("never"); } });
+    assert.ok(all.failed && all.brief === "");
+    const c = await J.mission.run({ ...base, goal: "x", ask: async () => { n++; return "t"; }, synth: async () => "b", cancelled: () => n >= 1 });
+    assert.ok(c.cancelled && n === 1);
+    await assert.rejects(() => J.mission.run({ ...base, goal: "  ", ask: async () => "", synth: async () => "" }), /Write the goal/);
+    const noSynth = await J.mission.run({ ...base, goal: "x", ask: async () => "t", synth: async () => { throw new Error("x"); } });
+    assert.equal(noSynth.brief, ""); assert.match(J.mission.toMarkdown(noSynth), /could not be written/);
+  });
+})();
 // ---------- VISION ----------
 test("VISION is a full agent: online, own core, summoned by name, honest about what he can look up", () => {
   const v = J.AGENTS.vision;

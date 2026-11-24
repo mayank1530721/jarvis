@@ -433,8 +433,10 @@
         parameters: { type: "object", properties: { url: { type: "string", description: "Full URL, e.g. https://youtube.com" } }, required: ["url"] } } },
     { type: "function", function: { name: "search_web", description: "Open a Google search for a query in a new tab.",
         parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
-    { type: "function", function: { name: "remember", description: "Save a fact about the user to long-term memory. Use when the user asks you to remember something.",
+    { type: "function", function: { name: "remember", description: "Save one short fact about the user to long-term memory (a single plain sentence). Use it when the user asks you to remember something, and also on your own when they tell you something that will matter later: their projects, preferences, plans, deadlines, people in their life, goals. Do not announce it every time. Never save passwords, keys, card numbers or other secrets, and nothing from a private vault chat.",
         parameters: { type: "object", properties: { fact: { type: "string" } }, required: ["fact"] } } },
+    { type: "function", function: { name: "recall_memory", description: "Search everything you have remembered about the user for a topic. Only the most relevant facts are shown to you automatically, so use this when you need something that might be stored.",
+        parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
     { type: "function", function: { name: "set_timer", description: "Set a timer that alerts the user when it ends.",
         parameters: { type: "object", properties: { seconds: { type: "number" }, label: { type: "string" } }, required: ["seconds"] } } }
   ];
@@ -647,7 +649,16 @@
     },
     search_web: ({ query }) =>
       window.open("https://www.google.com/search?q=" + encodeURIComponent(query), "_blank", "noopener") ? "Opened search for: " + query : "The browser blocked the popup. Ask the user to allow popups for this page.",
-    remember: ({ fact }) => { S.memories.push(fact); store.set("jarvis.memories", S.memories); renderMemList(); renderVitals(); return "Saved."; },
+    remember: ({ fact }) => {
+      const r = J.memory.add(S.memories, fact);
+      if (r.status === "empty") return "Nothing to save.";
+      if (r.status === "duplicate") return "Already remembered.";
+      S.memories = r.facts; store.set("jarvis.memories", S.memories); renderMemList(); renderVitals(); return "Saved.";
+    },
+    recall_memory: ({ query }) => {
+      const hits = J.memory.select(S.memories, query, 12).map(f => f.replace(J.memory.PIN, ""));
+      return hits.length ? hits.join("\n") : "Nothing remembered about that.";
+    },
     set_timer: ({ seconds, label }) => {
       const secs = Math.max(1, Number(seconds) || 1);
       const entry = { label: label || "Timer", end: Date.now() + secs * 1000 };
@@ -661,6 +672,111 @@
     }
   };
 
+  // ---------- long memory ----------
+  // Only the facts that matter for this message are sent (pinned, best keyword matches, newest), plus rolling notes of old chats.
+  S.query = "";
+  const memoryBlock = id => {
+    let s = "";
+    const sum = store.get("jarvis.summary." + id, "");
+    if (sum) s += "\nNotes from your earlier conversations with the user (older than the messages below):\n" + sum;
+    if (S.memories.length) {
+      const pick = J.memory.select(S.memories, S.query, 30).map(f => f.replace(J.memory.PIN, ""));
+      s += "\nThings you remember about the user" + (pick.length < S.memories.length ? " (the " + pick.length + " most relevant of " + S.memories.length + "; use recall_memory to search the rest)" : "") + ":\n- " + pick.join("\n- ");
+    }
+    return s;
+  };
+  // When a chat gets long, the oldest messages are folded into a short set of notes instead of being thrown away.
+  // It uses only the agent's own provider (no backup provider), skips private chat, and a failure just means it tries again later.
+  let compacting = false;
+  async function compactHistory(id) {
+    if (compacting || S.privateChat) return;
+    const h = hist(id); if (h.length < 48) return;
+    const cut = J.memory.splitPoint(h, 30); if (cut < 6) return;
+    const c = cfgFor(id); if (!c.key) return;
+    compacting = true;
+    try {
+      const old = h.slice(0, cut), prev = store.get("jarvis.summary." + id, "");
+      const excerpt = J.memory.transcript(old, cfg().name || "User", agent(id).name);
+      let text = "";
+      if (excerpt) {
+        const msg = await J.model.call({ cfg: c, system: J.memory.SUMMARY_PROMPT, tools: [], status: () => {},
+          history: [{ role: "user", content: (prev ? "Earlier notes:\n" + prev + "\n\n" : "") + "New conversation excerpt:\n" + excerpt }] });
+        text = J.memory.cleanSummary(msg.content);
+        if (!text) return;
+        store.set("jarvis.summary." + id, text);
+      }
+      const cur = hist(id);
+      if (cur[0] === old[0]) { cur.splice(0, cut); saveHist(id); }
+      logActivity("Folded " + cut + " old messages into notes", id);
+    } catch (e) { /* try again after a later reply */ }
+    finally { compacting = false; }
+  }
+
+  // ---------- missions ----------
+  let missionRunning = false, missionStop = false, missionResult = null;
+  const pastMissions = () => store.get("jarvis.missions", []);
+  function renderMissionSteps() {
+    const box = $("mSteps"); box.innerHTML = "";
+    for (const st of J.mission.STEPS) {
+      const ready = !!cfgFor(st.agent).key, lab = el("label"), cb = el("input"); cb.type = "checkbox"; cb.id = "ms_" + st.id; cb.checked = st.on && ready; cb.disabled = !ready;
+      lab.append(cb, el("span", "", st.title + " \u00b7 " + agent(st.agent).name), el("small", "", ready ? "" : "(no key set)")); box.append(lab);
+      cb.onchange = updateMissionCost;
+    }
+    updateMissionCost();
+  }
+  const missionIds = () => J.mission.STEPS.filter(s => $("ms_" + s.id) && $("ms_" + s.id).checked).map(s => s.id);
+  function updateMissionCost() { const n = missionIds().length; $("mCost").textContent = n ? "About " + (n + 1) + " AI calls" : "Pick at least one agent"; $("mRun").disabled = !n || missionRunning; }
+  function renderPast() {
+    const list = pastMissions(), box = $("mPast"); box.innerHTML = ""; $("mPastBox").hidden = !list.length;
+    list.forEach((m, i) => {
+      const row = el("div", "pastrow"), open = el("button", "", "Open"), del = el("button", "", "Delete"); open.type = del.type = "button";
+      open.onclick = () => showMission(m.md);
+      del.onclick = () => { const l = pastMissions(); l.splice(i, 1); store.set("jarvis.missions", l); renderPast(); };
+      row.append(el("span", "", m.date + " \u00b7 " + m.goal), open, del); box.append(row);
+    });
+  }
+  function showMission(md) { missionResult = md; $("mResult").textContent = md; $("mResult").hidden = false; $("mActions").hidden = false; }
+  async function agentAsk(agentId, rules, userContent) {
+    const c = cfgFor(agentId); if (!c.key) throw new Error(agent(agentId).name + " has no API key set up.");
+    const sys = J.prefs.get(agentId).persona + "\n" + rules + (cfg().name ? "\nThe user's name is " + cfg().name + "." : "") + memoryBlock(agentId);
+    const msg = await J.model.call({ cfg: c, alt: altFor(agentId), system: sys, tools: [], status: () => {}, history: [{ role: "user", content: userContent }] });
+    return msg.content;
+  }
+  async function runMission() {
+    const goal = $("mGoal").value.trim();
+    if (!goal) { $("mProgress").textContent = "Write the goal first."; return; }
+    if (missionRunning) return;
+    missionRunning = true; missionStop = false; S.query = goal; $("mRun").disabled = true; $("mStop").hidden = false; $("mResult").hidden = true; $("mActions").hidden = true;
+    const prog = $("mProgress"); prog.innerHTML = ""; const rows = {};
+    const row = (key, label) => rows[key] || (rows[key] = (() => { const r = el("div", "mrow"); r.append(el("b", "", label), el("span", "", "")); prog.append(r); return r; })());
+    logActivity("Mission started", S.agent);
+    try {
+      const r = await J.mission.run({
+        goal, stepIds: missionIds(), nameOf: id => agent(id).name, cancelled: () => missionStop,
+        research: async g => { const list = await J.research.search(g.slice(0, 200)); if (!list.length) return null; const page = await J.research.read(list[0].title); if (page) addSource(page.title, page.url); return page; },
+        ask: (st, msg, rules) => agentAsk(st.agent, rules, msg),
+        synth: (sys, msg) => J.model.call({ cfg: cfgFor("jarvis"), alt: altFor("jarvis"), system: J.prefs.get("jarvis").persona + "\n" + sys + memoryBlock("jarvis"), tools: [], status: () => {}, history: [{ role: "user", content: msg }] }).then(m => m.content),
+        onProgress: (i, state, st, entry) => { const r2 = row(i, st.title); r2.className = "mrow " + state; r2.lastChild.textContent = state === "working" ? "working..." : state === "done" ? "done" : "failed" + (entry && entry.error ? ": " + entry.error : ""); }
+      });
+      if (r.cancelled) prog.append(el("div", "mrow failed", "Stopped."));
+      else if (r.failed) prog.append(el("div", "mrow failed", "Every step failed, so there is no brief. Check your API key and connection in Settings."));
+      else {
+        const md = J.mission.toMarkdown(r); showMission(md);
+        const l = pastMissions(); l.unshift({ date: new Date().toISOString().slice(0, 10), goal: goal.slice(0, 80), md }); store.set("jarvis.missions", l.slice(0, 10)); renderPast();
+        logActivity("Mission finished", S.agent);
+      }
+    } catch (e) { prog.append(el("div", "mrow failed", "Mission failed: " + (e && e.message ? e.message : e))); }
+    finally { missionRunning = false; $("mStop").hidden = true; updateMissionCost(); }
+  }
+  $("missionBtn").onclick = () => {
+    if (S.privateChat) { add("sys", "Missions are not available during a private chat."); return; }
+    renderMissionSteps(); renderPast(); $("missionDlg").showModal();
+  };
+  $("mRun").onclick = runMission; $("mStop").onclick = () => { missionStop = true; $("mStop").hidden = true; };
+  $("mClose").onclick = () => { missionStop = true; $("missionDlg").close(); };
+  $("mCopy").onclick = async () => { try { await navigator.clipboard.writeText(missionResult || ""); $("mCopy").textContent = "Copied"; } catch (e) { $("mCopy").textContent = "Copy failed"; } setTimeout(() => { $("mCopy").textContent = "Copy"; }, 1500); };
+  $("mDownload").onclick = () => { const a = el("a"); a.href = URL.createObjectURL(new Blob([missionResult || ""], { type: "text/markdown" })); a.download = "mission-brief.md"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
+
   // ---------- what each agent is told ----------
   // The prompt for an agent that is being consulted by another agent: its own personality, but no tools.
   function consultPrompt(id, fromId) {
@@ -668,7 +784,7 @@
     let s = J.prefs.get(id).persona;
     s += "\n" + J.STYLE + "\nYou are being consulted by " + agent(fromId).name + ", another agent in the same ecosystem, on behalf of the user. Answer in your own voice and from your own specialty, in plain text and under 120 words. Be direct, and disagree if you disagree. You cannot use tools or consult anyone else here. Do not write a formal verdict block.";
     if (c.name) s += "\nThe user's name is " + c.name + ".";
-    if (S.memories.length) s += "\nThings you remember about the user:\n- " + S.memories.join("\n- ");
+    s += memoryBlock(id);
     return s;
   }
   function systemPrompt(id) {
@@ -686,7 +802,7 @@
       const p = activeProject();
       if (p) s += "\nActive project: " + p.name + (p.notes ? "\nProject notes from the user:\n" + p.notes : "");
     }
-    if (S.memories.length) s += "\nThings you remember about the user:\n- " + S.memories.join("\n- ");
+    s += memoryBlock(id);
     if (S.privateChat && (id === "jarvis" || id === "friday") && J.vault.isUnlocked() && J.vault.mode() === "private") {
       const privateNotes = J.vault.getNotes();
       s += "\nPRIVATE BLACK VAULT CONTEXT. This is confidential user-authenticated context. Discuss it only with the user in this private session. Never reveal, hint at, summarize, or mention these details outside this session. Do not send them to other agents or external tools.\n" + J.vault.context(privateNotes).text + "\nWhen this private chat ends, a short summary of it is saved to the vault and appears here in later private chats, so you can build on earlier entries naturally.";
@@ -840,6 +956,8 @@
   async function send(text) {
     text = text.trim();
     if (!text || S.busy || S.switching) return;
+    if (missionRunning) { add("sys", "A mission is running. Wait for it to finish, or stop it first."); return; }
+    S.query = text;
     if (S.privateChat && !["jarvis", "friday"].includes(S.agent)) { add("sys", "Private chat is available only with JARVIS and FRIDAY. Return to one of them first."); return; }
     if (!S.privateChat && await handleCommand(text)) return;
     if (!cfgFor(S.agent).key) {
@@ -903,7 +1021,7 @@
     S.busy = false;
     renderVitals(); renderPanels(); renderAgents();
     if (!S.speaking) setState("idle");
-    if (!S.busy) { const last = h[h.length - 1]; if (last && last.role === "assistant" && last.content) maybeChime(text, last.content); }
+    if (!S.busy) { const last = h[h.length - 1]; if (last && last.role === "assistant" && last.content) maybeChime(text, last.content); compactHistory(S.agent); }
   }
   $("form").onsubmit = e => {
     e.preventDefault();
@@ -1083,7 +1201,34 @@
   $("vaultLock").onclick=async()=>{if(S.privateChat){await finishPrivateChat(true);return;}J.vault.lock();S.privateChat=false;S.privateHistory=[];$("vaultPass").value="";$("vaultReviewPass").value="";$("vaultNotes").value="";$("vaultDlg").close();renderHistory();$("box").placeholder=agent().placeholder;add("sys","Black Vault locked. Private session cleared.");};
 
   // ---------- memory, agents and project dialogs ----------
-  const openMemory = () => { $("mText").value = S.memories.join("\n"); $("memory").showModal(); };
+  function renderSummaries() {
+    const box = $("mSums"); box.innerHTML = ""; let any = false;
+    for (const id of J.AGENT_ORDER) {
+      const t = store.get("jarvis.summary." + id, ""); if (!t) continue; any = true;
+      const row = el("div", "sumrow"), b = el("button", "", "Clear"); b.type = "button";
+      b.onclick = () => { store.set("jarvis.summary." + id, ""); renderSummaries(); };
+      row.append(el("b", "", agent(id).name), b, el("pre", "", t)); box.append(row);
+    }
+    if (!any) box.append(el("small", "", "Nothing yet. When a chat passes about 48 messages, the oldest part is folded into notes here instead of being lost."));
+  }
+  const openMemory = () => { $("mText").value = S.memories.join("\n"); renderSummaries(); $("memory").showModal(); };
+  $("mExport").onclick = () => {
+    const data = { app: "jarvis", exported: new Date().toISOString(), memories: $("mText").value.split("\n").map(s => s.trim()).filter(Boolean),
+      summaries: Object.fromEntries(J.AGENT_ORDER.map(id => [id, store.get("jarvis.summary." + id, "")]).filter(x => x[1])) };
+    const a = el("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })); a.download = "jarvis-memory.json"; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  $("mImport").onchange = async ev => {
+    const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+    try {
+      const raw = await f.text(); let lines;
+      try { const j = JSON.parse(raw); lines = Array.isArray(j) ? j : j.memories; } catch (e) { lines = raw.split("\n"); }
+      const cur = $("mText").value.split("\n").map(s => s.trim()).filter(Boolean);
+      const r = J.memory.merge(cur, (lines || []).map(String));
+      $("mText").value = r.facts.join("\n");
+      $("mMsg").textContent = "Added " + r.added + " new facts, skipped " + r.skipped + " duplicates or empty lines. Press Save to keep them.";
+    } catch (e) { $("mMsg").textContent = "Could not read that file."; }
+  };
   $("memBtn").onclick = openMemory; $("memEdit").onclick = openMemory;
   $("mCancel").onclick = () => $("memory").close();
   $("mSave").onclick = () => {

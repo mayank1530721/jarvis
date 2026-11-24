@@ -330,6 +330,20 @@ body[data-agent="friday"] .core-reticle span { border-color:rgba(214,180,255,.9)
 .friday-board-card em { color:var(--c); font:9px var(--mono); font-style:normal; letter-spacing:1px; }
 .friday-note p { color:var(--text); font-size:12px; line-height:1.7; margin:5px 0 12px; }
 .friday-note>span { color:var(--dim); font:9px var(--mono); letter-spacing:1.5px; }
+/* mission dialog */
+#missionDlg { max-width: 640px; }
+#mSteps label { display:flex; gap:8px; align-items:center; margin:4px 0; font:12px var(--mono); }
+#mSteps input { width:auto; } #mSteps small { color:var(--dim); }
+#mProgress .mrow { display:flex; gap:10px; font:12px var(--mono); padding:4px 0; border-bottom:1px solid rgba(var(--base-rgb),.12); }
+#mProgress .mrow b { min-width:92px; } .mrow.working b { color:var(--c); } .mrow.failed b { color:#ff8a8a; } .mrow.done b { color:#5dffb0; }
+#mResult { white-space:pre-wrap; max-height:28vh; overflow:auto; margin:10px 0; padding:12px; border:1px solid var(--line); border-radius:8px; font:12px/1.6 var(--mono); color:var(--text); background:rgba(0,0,0,.25); }
+.pastrow { display:flex; gap:8px; align-items:center; margin:6px 0; font:11px var(--mono); } .pastrow span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* memory dialog */
+.filebtn { display:inline-block; padding:7px 14px; border:1px solid var(--line); border-radius:6px; cursor:pointer; color:var(--c); font:11px var(--mono); }
+#memory details { margin-top:10px; } #memory summary { cursor:pointer; color:var(--c); font:11px var(--mono); }
+.sumrow { margin:8px 0; padding:8px; border:1px solid var(--line); border-radius:6px; }
+.sumrow b { color:var(--c); font:11px var(--mono); } .sumrow button { float:right; font-size:10px; }
+.sumrow pre { white-space:pre-wrap; margin:6px 0 0; font:11px/1.5 var(--mono); color:var(--text); }
 /* VISION research lab */
 body[data-agent="vision"] .stage {
   background:
