@@ -453,6 +453,16 @@
       parameters: { type: "object", properties: { file: { type: "string", description: "Path of the .mp4/.mov/.webm inside the workspace, e.g. clips/clip1.mp4" }, content: { type: "string", description: "Caption/description with hashtags, exactly as it should appear." }, title: { type: "string", description: "YouTube title (max 100 chars), used when posting to YouTube." }, channels: { type: "array", items: { type: "string" } } }, required: ["file", "content"] } } };
   const CLIPS_TOOL = { type: "function", function: { name: "clips_list", description: "List the video clips (.mp4/.mov/.webm) in a workspace folder, default 'clips'. Use this to see what the user has ready to post.",
       parameters: { type: "object", properties: { folder: { type: "string" } } } } };
+  // Clip desk: VISION finds a source video, then downloads it, reads its captions and cuts the best moments into the clips folder.
+  // Needs yt-dlp and ffmpeg on the user's computer; every download and cut is approved by the user.
+  const CLIP_TOOLS = [
+    { type: "function", function: { name: "clip_search", description: "Search YouTube for source videos (no key needed). Set creative_commons true to only get Creative Commons videos that are free to reuse. Returns id, title, channel, length, views and link.",
+        parameters: { type: "object", properties: { query: { type: "string" }, creative_commons: { type: "boolean" }, count: { type: "number" } }, required: ["query"] } } },
+    { type: "function", function: { name: "clip_fetch", description: "Download one source video to the clips/source folder and return its timestamped transcript ([mm:ss] text) from the video's captions. The user approves first. Only use videos the user says are allowed (campaign sources, their own, Creative Commons).",
+        parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } } },
+    { type: "function", function: { name: "clip_cut", description: "Cut clips from a downloaded source into the clips folder. Each segment: start and end in seconds (5 to 180 s long), name. Max 8. vertical true crops to 9:16 for Reels/Shorts. The user approves first. Afterwards tell the user FRIDAY can write captions and post them.",
+        parameters: { type: "object", properties: { source: { type: "string", description: "The 'source' path returned by clip_fetch." }, segments: { type: "array", items: { type: "object", properties: { start: { type: "number" }, end: { type: "number" }, name: { type: "string" } }, required: ["start", "end"] } }, vertical: { type: "boolean" } }, required: ["source", "segments"] } } }
+  ];
   // GitHub (code). Only ULTRON has it, once a token is saved. Reading is free; every change needs approval and lands on a new branch as a pull request.
   const ghToken = () => String(store.get("jarvis.github", "") || "");
   const GH_TOOLS = [
@@ -510,7 +520,7 @@
     parameters: { type: "object", properties: {
       agent: { type: "string", enum: switchTargets(), description: "Which agent (lowercase id)." },
       task: { type: "string", description: "What the user wants done, in their words. Empty if they only asked for the agent." } }, required: ["agent"] } } });
-  const toolsFor = id => TOOLS.concat((id === "jarvis" && switchTargets().length) ? [SWITCH_TOOL()] : [], ((id === "jarvis" || id === "friday") && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "friday" && uplikaKey() && handsToken()) ? [CLIPS_TOOL, VIDEO_TOOL] : [], (id === "ultron" && ghToken()) ? GH_TOOLS : [], (id === "ultron" && handsToken()) ? HANDS_TOOLS : [], id === "vision" ? RESEARCH_TOOLS : [],
+  const toolsFor = id => TOOLS.concat((id === "jarvis" && switchTargets().length) ? [SWITCH_TOOL()] : [], ((id === "jarvis" || id === "friday") && uplikaKey()) ? UPLIKA_TOOLS : [], (id === "friday" && uplikaKey() && handsToken()) ? [CLIPS_TOOL, VIDEO_TOOL] : [], (id === "ultron" && ghToken()) ? GH_TOOLS : [], (id === "ultron" && handsToken()) ? HANDS_TOOLS : [], ((id === "vision" || id === "ultron") && handsToken()) ? CLIP_TOOLS : [], id === "vision" ? RESEARCH_TOOLS : [],
     consultTargets(id).length ? [consultTool(id)] : []);
   // Ask before a file write or command. "Allow for this task" approves the rest of this one request (S.autoTask).
   function askHands(title, summary) {
@@ -673,6 +683,24 @@
       logActivity("Posted video to " + targets.length + " channel(s)", S.agent);
       return "Video submitted to Uplika for " + targets.map(a => a.platform + " " + a.handle).join(", ") + ". Uplika response: " + JSON.stringify(res).slice(0, 300);
     },
+    clip_search: async ({ query, creative_commons, count }) => {
+      logActivity("Searching videos: " + query, S.agent);
+      const r = await J.hands.clipSearch(handsBase(), handsToken(), query, creative_commons, Number(count) || 8);
+      return r.results.length ? r.results.map(v => v.title + " | " + (v.channel || "?") + " | " + (v.seconds ? Math.round(v.seconds / 60) + " min" : "?") + " | " + (v.views != null ? v.views + " views" : "") + " | " + v.url).join("\n") : "No videos found.";
+    },
+    clip_fetch: async ({ url }) => {
+      if (!(await approveHands("Download this video?", "Download to the clips/source folder (needs yt-dlp):\n" + url, "download " + url))) return "The user declined, so nothing was downloaded.";
+      logActivity("Downloading " + url, S.agent);
+      const r = await J.hands.clipFetch(handsBase(), handsToken(), url);
+      return "Saved as " + r.source + ".\n" + (r.transcript ? J.hands.forModel(r.transcript, "transcript") : "No captions were available, so there is no transcript. Tell the user; you cannot judge the moments without it.");
+    },
+    clip_cut: async ({ source, segments, vertical }) => {
+      const list = (segments || []).map(x => (x.name || "clip") + ": " + x.start + "s to " + x.end + "s").join("\n");
+      if (!(await approveHands("Cut these clips?", "From " + source + (vertical ? " (vertical 9:16)" : "") + ":\n" + list, "cut clips"))) return "The user declined, so nothing was cut.";
+      logActivity("Cutting " + (segments || []).length + " clip(s)", S.agent);
+      const r = await J.hands.clipCut(handsBase(), handsToken(), source, segments, vertical);
+      return "Made: " + r.clips.join(", ") + ". They are ready in the clips folder for FRIDAY to caption and post.";
+    },
     get_time: () => new Date().toString(),
     open_website: ({ url }) => {
       if (!/^https?:\/\//i.test(url)) url = "https://" + url;
@@ -828,6 +856,7 @@
     if (consultTargets(id).length) s += "\nYou can consult other available agents (" + consultTargets(id).map(x => agent(x).name).join(", ") + ") with the consult_agent tool when their specialty would really improve your answer or when the user asks you to get their view. They do not see this conversation, so put the facts and any other agent's points into the question. If you want two agents to react to each other, consult the first, then pass their answer to the second. Never claim an agent said something unless the tool result says so, and give the user your own conclusion at the end.";
     if (id === "ultron" && ghToken()) s += "\nYou are connected to the user's GitHub. Your earlier limits on touching files are lifted for GitHub: use github_repos and github_read to look at their code, then github_propose_change to suggest edits. Read the relevant files first, make small focused changes with complete file contents, and never invent file contents you have not read. Every change needs the user's approval and arrives as a pull request on a new branch; you cannot merge or change the default branch. Never say a change was made until the tool result says it was.";
     if (id === "ultron" && handsToken()) s += "\nYou have hands: a desktop agent on the user's computer. Your earlier limits on running code and touching files are lifted for it. Tools: fs_list and fs_read (free, inside their workspace folder), fs_write (complete file content, needs their approval) and run_command (needs their approval). Work like a senior engineer: look before you change anything, read the files you will touch, make small focused changes, then RUN the code or the tests and read the real output. If something fails, read the error, fix the cause, and run it again; keep going until it works or you are genuinely stuck, then say exactly what is blocking you. Never claim something works unless a command output showed it. Never say a file was written until the tool result says so. Commands cannot take keyboard input and are stopped after their timeout, so use non-interactive flags. If the user declines an action, do not retry the same action; ask what they want instead. Windows is the likely system, so check before assuming Unix commands. Keep your final message short: what you did, what you ran, what the result was.\n" + J.VIDEO_STUDIO + "\n" + J.YOUTUBE_STUDIO;
+    if ((id === "vision" || id === "ultron") && handsToken()) s += "\nCLIP DESK: you can run the user's clip pipeline with clip_search, clip_fetch and clip_cut. When asked for clips: search (prefer long videos, and Creative Commons or sources the user named), pick one, clip_fetch it, read the transcript, choose 3 to 6 self-contained moments of 20 to 60 seconds with a strong first line, clip_cut them (vertical for Reels/Shorts), then tell the user FRIDAY can caption and post them. Only use sources the user says are allowed to be clipped; if unsure, ask. Never claim you watched a video: you only have its captions.";
     if (id === "vision") s += "\nYou have wiki_search and wiki_read for Wikipedia. Pages you read are listed for the user in their Sources panel. Never say you checked something unless a tool result in this conversation shows it.";
     if (id === "ultron") {
       const p = activeProject();

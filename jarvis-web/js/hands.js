@@ -87,6 +87,9 @@
     },
     write: function (base, token, path, content) { return call(base, token, "/fs/write", { path: path, content: content }); },
     put: function (base, token, path, url, contentType) { return call(base, token, "/fs/put", { path: path, url: url, contentType: contentType }); },
+    clipSearch: function (base, token, query, cc, n) { return call(base, token, "/clip/search", { query: query, cc: !!cc, n: n || 8 }); },
+    clipFetch: function (base, token, url) { return call(base, token, "/clip/fetch", { url: url }); },
+    clipCut: function (base, token, source, segments, vertical) { return call(base, token, "/clip/cut", { source: source, segments: segments, vertical: !!vertical }); },
     run: function (base, token, command, cwd, timeout) { return call(base, token, "/run", { command: command, cwd: cwd || "", timeout: timeout || 60 }); }
   };
   if (typeof module !== "undefined" && module.exports) module.exports = J;
