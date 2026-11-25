@@ -284,7 +284,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {
                 "ok": True, "service": "JARVIS Desktop Agent", "version": VERSION,
                 "uptime_seconds": round(time.time() - self.server.started),
-                "capabilities": ["health", "status", "fs.list", "fs.read", "fs.write", "fs.put", "run"],
+                "capabilities": ["health", "status", "fs.list", "fs.read", "fs.write", "fs.put", "clip", "run"],
                 "execution_enabled": True, "workspace": self.server.root
             })
             return
@@ -305,6 +305,19 @@ class Handler(BaseHTTPRequestHandler):
                 out = do_write(root, data.get("path", ""), data.get("content"))
             elif self.path == "/fs/put":
                 out = do_put(root, data.get("path", ""), data.get("url"), data.get("contentType"))
+            elif self.path.startswith("/clip/"):
+                import clipper
+                try:
+                    if self.path == "/clip/search":
+                        out = {"ok": True, "results": clipper.search(data.get("query"), data.get("n", 8), bool(data.get("cc")))}
+                    elif self.path == "/clip/fetch":
+                        out = dict(clipper.fetch(root, data.get("url")), ok=True)
+                    elif self.path == "/clip/cut":
+                        out = dict(clipper.cut(root, data.get("source", ""), data.get("segments"), data.get("vertical"), resolve_in_workspace), ok=True)
+                    else:
+                        raise ApiError(404, "Not found")
+                except clipper.ClipError as e:
+                    raise ApiError(400, str(e))
             elif self.path == "/run":
                 out = do_run(root, data.get("command"), data.get("cwd", ""), data.get("timeout"))
             else:

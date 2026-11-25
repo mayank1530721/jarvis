@@ -804,5 +804,12 @@ test("the vault text shown to the private chat agent is capped: newest entries k
     await assert.rejects(() => J.uplika.publishVideo("k", { fileName: "a.avi", bytes: 5, putFile: async () => {} }), /mp4/);
   });
 
+  await testAsync("clip tools call the desktop agent clip endpoints", async () => {
+    const seen = [];
+    globalThis.fetch = async (u, o) => { seen.push(u.replace(/^.*:\d+/, "") + " " + o.body); return { ok: true, status: 200, json: async () => ({ ok: true }) }; };
+    await J.hands.clipSearch("http://x:1", "t", "q", true, 5); await J.hands.clipFetch("http://x:1", "t", "https://y"); await J.hands.clipCut("http://x:1", "t", "clips/source/a.mp4", [{ start: 1, end: 9 }], true);
+    assert.match(seen[0], /^\/clip\/search .*"cc":true/); assert.match(seen[1], /^\/clip\/fetch/); assert.match(seen[2], /^\/clip\/cut .*"vertical":true/);
+  });
+
   console.log(process.exitCode ? "\nSome checks FAILED." : "\nAll " + passed + " checks passed.");
 })();
