@@ -56,3 +56,6 @@ Ask VISION (or ULTRON) for clips and he runs the pipeline on your computer throu
 - Every download and cut asks for your approval. Every post asks for your approval.
 - He works from the video's captions, not by watching it. Videos with no captions can't be judged yet (no speech-to-text fallback is built).
 - Only use sources you may clip: campaign sources, your own videos, Creative Commons.
+
+## Switching inside a private chat
+In a Black Vault private chat a "Switch to FRIDAY / JARVIS" button appears in the header. Each of them keeps their own private conversation for the session; nothing goes to normal history. Ending the chat saves one encrypted summary per agent you actually talked to.
