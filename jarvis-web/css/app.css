@@ -361,8 +361,8 @@ body[data-agent="vision"] .stage {
 /* FRIDAY's side panels follow the shared layout rules above and hide with every agent's below 900px. */
 
 /* BLACK VAULT */
-#vaultBtn,#privEnd{border-color:rgba(176,110,255,.55);color:#d7b7ff}
-#privEnd[hidden]{display:none!important}
+#vaultBtn,#privEnd,#privSwitch{border-color:rgba(176,110,255,.55);color:#d7b7ff}
+#privEnd[hidden],#privSwitch[hidden]{display:none!important}
 .vault-status{margin:12px 0;padding:9px;border:1px solid rgba(176,110,255,.35);color:#d7b7ff;font:11px/1.5 var(--mono)}
 #vaultSetup,#vaultUnlock,#vaultContent{margin-top:12px}
 #vaultCreate,#vaultUnlockBtn,#vaultReviewBtn{margin-top:8px;width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;color:var(--text);background:rgba(176,110,255,.12);cursor:pointer}

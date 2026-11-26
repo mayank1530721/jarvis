@@ -67,10 +67,14 @@
     speakOn: store.get("jarvis.speak", false),
     memories: store.get("jarvis.memories", []),
     histories: {},          // agent id -> API-format messages, each agent keeps its own
-    privateChat: false, privateHistory: [],
+    privateChat: false, privHist: {},   // private chat: each of JARVIS and FRIDAY keeps its own conversation (S.privateHistory is the active one)
     last: null,             // the specialist agent talked about most recently, so "tell him to..." knows who "him" is
     pending: null           // { agent, bubble, row } while JARVIS waits for "are you certain?"
   };
+  Object.defineProperty(S, "privateHistory", {
+    get() { return S.privHist[S.agent] || (S.privHist[S.agent] = []); },
+    set(v) { if (Array.isArray(v) && !v.length) S.privHist = {}; }   // assigning [] clears every private conversation
+  });
   const hist = id => { id = id || S.agent; return S.histories[id] || (S.histories[id] = store.get("jarvis.history." + id, [])); };
   const saveHist = id => { S.histories[id] = hist(id).slice(-60); store.set("jarvis.history." + id, S.histories[id]); };
   const agent = id => J.AGENTS[id || S.agent];
@@ -151,6 +155,11 @@
   }
   function renderHistory() {
     log.innerHTML = "";
+    if (S.privateChat) {
+      add("sys", "BLACK VAULT PRIVATE SESSION with " + agent().name + " · not saved to normal history. Use the switch button to talk to " + (S.agent === "jarvis" ? "FRIDAY" : "JARVIS") + " in their own private chat.");
+      for (const m of S.privateHistory) { if (m.role === "user") add("me", m.content); else if (m.role === "assistant" && m.content) add("ai", m.content); }
+      return;
+    }
     for (const m of hist()) {
       if (m.role === "user") add("me", m.content);
       else if (m.role === "assistant" && m.content) add("ai", m.content);
@@ -1220,20 +1229,25 @@
   $("vaultUnlockBtn").onclick=async()=>{try{await J.vault.unlock($("vaultPass").value,"private");$("vaultPass").value="";$("vaultUnlock").hidden=true;$("vaultContent").hidden=false;$("vaultNotes").value=J.vault.getNotes().join("\n");$("vaultNotes").readOnly=false;$("vaultSave").hidden=false;$("vaultChat").hidden=false;$("vaultStatus").textContent="PRIVATE ACCESS · JARVIS and FRIDAY only";}catch(e){$("vaultStatus").textContent="Could not unlock: "+e.message;}};
   $("vaultReviewBtn").onclick=async()=>{try{await J.vault.unlock($("vaultReviewPass").value,"review");$("vaultReviewPass").value="";$("vaultUnlock").hidden=true;$("vaultContent").hidden=false;$("vaultNotes").value=J.vault.getNotes().join("\n");$("vaultNotes").readOnly=true;$("vaultSave").hidden=true;$("vaultChat").hidden=true;$("vaultStatus").textContent="REVIEW ONLY · editing and chat disabled";}catch(e){$("vaultStatus").textContent="Could not review: "+e.message;}};
   $("vaultSave").onclick=async()=>{try{await J.vault.save($("vaultNotes").value.split("\n").map(x=>x.trim()).filter(Boolean));$("vaultStatus").textContent="Saved · encrypted in this browser";}catch(e){$("vaultStatus").textContent=e.message;}};
-  $("vaultChat").onclick=()=>{if(!J.vault.isUnlocked()||J.vault.mode()!=="private")return;if(!["jarvis","friday"].includes(S.agent)){$("vaultStatus").textContent="Switch to JARVIS or FRIDAY first.";return;}S.privateChat=true;S.privateHistory=[];$("privEnd").hidden=false;$("vaultDlg").close();$("log").innerHTML="";add("sys","BLACK VAULT PRIVATE SESSION · JARVIS and FRIDAY only · chat is not saved to normal history. Press End private chat to save a summary to the vault, or Lock the vault.");$("box").placeholder="Private conversation with "+agent().name+"...";};
+  $("vaultChat").onclick=()=>{if(!J.vault.isUnlocked()||J.vault.mode()!=="private")return;if(!["jarvis","friday"].includes(S.agent)){$("vaultStatus").textContent="Switch to JARVIS or FRIDAY first.";return;}S.privateChat=true;S.privateHistory=[];S.privDone={};$("privEnd").hidden=false;$("privSwitch").hidden=false;$("privSwitch").textContent="Switch to "+(S.agent==="jarvis"?"FRIDAY":"JARVIS");$("vaultDlg").close();$("log").innerHTML="";add("sys","BLACK VAULT PRIVATE SESSION · JARVIS and FRIDAY only · chat is not saved to normal history. Press End private chat to save a summary to the vault, or Lock the vault.");$("box").placeholder="Private conversation with "+agent().name+"...";};
   // Ending a private chat saves a short summary of it into the vault (encrypted like every other entry). The summary is written by the
   // same provider that ran the chat, with no backup provider, so the conversation is never sent anywhere it was not already going.
   async function summarizePrivateChat() {
-    if (!S.privateHistory.some(m => m.role === "user")) return { skipped: "empty" };
+    const ids = Object.keys(S.privHist).filter(id => S.privHist[id].some(m => m.role === "user"));
+    if (!ids.length) return { skipped: "empty" };
     if (!J.vault.isUnlocked() || J.vault.mode() !== "private") return { error: "The vault is not unlocked for editing." };
-    const id = S.agent, c = cfgFor(id);
-    if (!c.key) return { error: agent(id).name + " has no API key set up." };
-    const msg = await J.model.call({ cfg: c, system: J.vault.SUMMARY_PROMPT, tools: [], status: () => {},
-      history: [{ role: "user", content: J.vault.transcript(S.privateHistory, cfg().name || "User", agent(id).name) }] });
-    const text = J.vault.cleanSummary(msg.content);
-    if (!text) return { skipped: "nothing" };
-    await J.vault.addNote(J.vault.summaryEntry(new Date(), agent(id).name, text));
-    return { saved: true };
+    for (const id of ids) if (!cfgFor(id).key) return { error: agent(id).name + " has no API key set up." };
+    let saved = 0;
+    for (const id of ids) {
+      if (S.privDone && S.privDone[id]) { saved++; continue; }   // already saved on an earlier try, don't double up
+      const msg = await J.model.call({ cfg: cfgFor(id), system: J.vault.SUMMARY_PROMPT, tools: [], status: () => {},
+        history: [{ role: "user", content: J.vault.transcript(S.privHist[id], cfg().name || "User", agent(id).name) }] });
+      const text = J.vault.cleanSummary(msg.content);
+      if (!text) continue;
+      await J.vault.addNote(J.vault.summaryEntry(new Date(), agent(id).name, text));
+      (S.privDone = S.privDone || {})[id] = true; saved++;
+    }
+    return saved ? { saved: true } : { skipped: "nothing" };
   }
   let endingPrivate = false;
   async function finishPrivateChat(lockAfter) {
@@ -1248,7 +1262,7 @@
         $("vaultStatus").textContent = "Summary not saved."; add("sys", "Summary not saved, so the private chat is still open. Try End private chat again."); return false;
       }
       const note = r.error ? "Private chat ended without a summary." : r.saved ? "Summary saved to your Black Vault (encrypted)." : r.skipped === "empty" ? "Private chat ended. Nothing was said, so nothing was saved." : "Private chat ended. Nothing worth keeping, so no entry was added.";
-      S.privateChat = false; S.privateHistory = []; $("privEnd").hidden = true;
+      S.privateChat = false; S.privateHistory = []; S.privDone = {}; $("privEnd").hidden = true; $("privSwitch").hidden = true;
       if (lockAfter) { J.vault.lock(); $("vaultPass").value = ""; $("vaultReviewPass").value = ""; $("vaultNotes").value = ""; if ($("vaultDlg").open) $("vaultDlg").close(); }
       renderHistory(); $("box").placeholder = agent().placeholder;
       add("sys", note + (lockAfter ? " Black Vault locked." : ""));
@@ -1256,9 +1270,21 @@
     } finally { endingPrivate = false; S.busy = false; $("privEnd").disabled = false; if (!S.speaking) setState("idle"); }
   }
   $("privEnd").onclick = () => { finishPrivateChat(false); };
-  window.addEventListener("beforeunload", e => { if (S.privateChat && S.privateHistory.some(m => m.role === "user")) { e.preventDefault(); e.returnValue = ""; } });
+  // Private chat: flip between JARVIS and FRIDAY. Each keeps their own private conversation, nothing touches normal history.
+  $("privSwitch").onclick = async () => {
+    if (!S.privateChat || S.busy || S.switching || endingPrivate) return;
+    const to = S.agent === "jarvis" ? "friday" : "jarvis";
+    if (agent(to).status !== "online") { add("sys", agent(to).name + " is not online."); return; }
+    S.switching = true; if (rec) rec.stop(); J.stopSpeaking(); S.speaking = false;
+    S.agent = to; document.body.dataset.agent = to; setState("idle");
+    renderAll();
+    $("privSwitch").textContent = "Switch to " + (to === "jarvis" ? "FRIDAY" : "JARVIS");
+    $("box").placeholder = "Private conversation with " + agent().name + "...";
+    S.switching = false; $("box").focus();
+  };
+  window.addEventListener("beforeunload", e => { if (S.privateChat && Object.values(S.privHist).some(h => h.some(m => m.role === "user"))) { e.preventDefault(); e.returnValue = ""; } });
   $("vaultClose").onclick=()=>$("vaultDlg").close();
-  $("vaultLock").onclick=async()=>{if(S.privateChat){await finishPrivateChat(true);return;}J.vault.lock();S.privateChat=false;S.privateHistory=[];$("vaultPass").value="";$("vaultReviewPass").value="";$("vaultNotes").value="";$("vaultDlg").close();renderHistory();$("box").placeholder=agent().placeholder;add("sys","Black Vault locked. Private session cleared.");};
+  $("vaultLock").onclick=async()=>{if(S.privateChat){await finishPrivateChat(true);return;}J.vault.lock();S.privateChat=false;S.privateHistory=[];$("privSwitch").hidden=true;$("vaultPass").value="";$("vaultReviewPass").value="";$("vaultNotes").value="";$("vaultDlg").close();renderHistory();$("box").placeholder=agent().placeholder;add("sys","Black Vault locked. Private session cleared.");};
 
   // ---------- memory, agents and project dialogs ----------
   function renderSummaries() {
