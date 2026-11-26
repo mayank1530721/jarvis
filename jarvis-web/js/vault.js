@@ -1,6 +1,6 @@
 (function(root){
 "use strict";
-var J=root.J=root.J||{},KEY="jarvis.blackVault.v1",ROUNDS=310000,master=null,mode=null,notes=[],creating=false;
+var J=root.J=root.J||{},KEY="jarvis.blackVault.v1",ROUNDS=310000,master=null,mode=null,notes=[],chats=[],chatKey=null,creating=false,MAX_CHAT_BYTES=3500000;
 function enc(s){return new TextEncoder().encode(String(s))}
 function b64(a){var s="";for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s)}
 function un64(s){var x=atob(s),a=new Uint8Array(x.length);for(var i=0;i<x.length;i++)a[i]=x.charCodeAt(i);return a}
@@ -60,8 +60,11 @@ async function setup(p,r,onProgress){
     var reviewWrap=await wrap(r,raw);
     report(onProgress,"Encrypting and saving the empty vault…");
     var record={version:1,kdf:"PBKDF2-SHA-256",iterations:ROUNDS,cipher:"AES-256-GCM",vaultWrap:vaultWrap,reviewWrap:reviewWrap,data:await encrypt(key,[])};
+    var craw=rand(32);
+    record.chatWrap=await wrap(p,craw);
+    chatKey=await root.crypto.subtle.importKey("raw",craw,{name:"AES-GCM"},false,["encrypt","decrypt"]);
     writeVault(record);
-    master=key;mode="private";notes=[];
+    master=key;mode="private";notes=[];chats=[];
     return true;
   }finally{creating=false}
 }
@@ -73,7 +76,17 @@ async function unlock(p,m){
   var k=await root.crypto.subtle.importKey("raw",raw,{name:"AES-GCM"},false,m==="review"?["decrypt"]:["encrypt","decrypt"]);
   var n=await decrypt(k,v.data);
   if(!Array.isArray(n))throw Error("Vault data is invalid.");
-  master=k;mode=m==="review"?"review":"private";notes=n;
+  var c=[],ck=null;
+  if(m!=="review"){
+    // Saved chats use their own key, locked only by the owner password: the review-only password cannot open them.
+    var craw;
+    if(v.chatWrap)craw=await unwrap(p,v.chatWrap);
+    else{craw=rand(32);v.chatWrap=await wrap(p,craw)}
+    ck=await root.crypto.subtle.importKey("raw",craw,{name:"AES-GCM"},false,["encrypt","decrypt"]);
+    if(v.chats){c=await decrypt(ck,v.chats);if(!Array.isArray(c))throw Error("Saved chats are invalid.")}
+    if(!readVault().chatWrap)writeVault(v);
+  }
+  master=k;chatKey=ck;mode=m==="review"?"review":"private";notes=n;chats=c;
   return{mode:mode,notes:notes.slice()};
 }
 async function save(n){
@@ -84,6 +97,30 @@ async function save(n){
   v.data=await encrypt(master,n);
   writeVault(v);notes=n.slice();return true;
 }
+
+// ---- saved private chats (full transcripts, encrypted with the same key, stored beside the notes) ----
+function cleanMessages(list){
+  return(list||[]).filter(function(m){return m&&(m.role==="user"||m.role==="assistant")&&typeof m.content==="string"&&m.content.trim()})
+    .map(function(m){return{role:m.role,content:m.content}});
+}
+async function writeChats(next){
+  if(!master||mode!=="private")throw Error("Unlock with the vault password to edit.");
+  var v=readVault();
+  if(!v||v.version!==1)throw Error("The encrypted vault record is missing.");
+  if(JSON.stringify(next).length>MAX_CHAT_BYTES)throw Error("The vault has no room for more saved chats. Delete some old chats in the Black Vault window first.");
+  if(!chatKey)throw Error("The chat key is not available. Unlock again.");
+  v.chats=await encrypt(chatKey,next);
+  writeVault(v);chats=next;return true;
+}
+// Adds a chat, or replaces the one with the same id (so a chat can be saved again after every reply).
+async function saveChat(chat){
+  var msgs=cleanMessages(chat&&chat.messages);
+  if(!msgs.some(function(m){return m.role==="user"}))return false;
+  var entry={id:String(chat.id),agent:String(chat.agent||""),user:String(chat.user||""),date:String(chat.date||new Date().toISOString()),messages:msgs};
+  var next=chats.filter(function(c){return c.id!==entry.id});next.push(entry);
+  return writeChats(next);
+}
+async function deleteChat(id){return writeChats(chats.filter(function(c){return c.id!==String(id)}))}
 
 // ---- private chat summaries ----
 function two(n){return n<10?"0"+n:""+n}
@@ -131,9 +168,9 @@ async function addNote(entry){
 }
 J.vault={
   exists:function(){try{return!!readVault()}catch(e){return false}},
-  setup:setup,unlock:unlock,save:save,addNote:addNote,
+  setup:setup,unlock:unlock,save:save,addNote:addNote,saveChat:saveChat,deleteChat:deleteChat,getChats:function(){return chats.slice()},
   SUMMARY_PROMPT:SUMMARY_PROMPT,transcript:transcript,cleanSummary:cleanSummary,summaryEntry:summaryEntry,context:context,stamp:stamp,
-  lock:function(){master=null;mode=null;notes=[]},
+  lock:function(){master=null;chatKey=null;mode=null;notes=[];chats=[]},
   isUnlocked:function(){return!!master},
   mode:function(){return mode},
   getNotes:function(){return notes.slice()}

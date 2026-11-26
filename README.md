@@ -59,3 +59,6 @@ Ask VISION (or ULTRON) for clips and he runs the pipeline on your computer throu
 
 ## Switching inside a private chat
 In a Black Vault private chat a "Switch to FRIDAY / JARVIS" button appears in the header. Each of them keeps their own private conversation for the session; nothing goes to normal history. Ending the chat saves one encrypted summary per agent you actually talked to.
+
+## Every private chat is saved
+Each private chat is kept in full, encrypted, in your Black Vault, and saved again after every reply, so closing the tab loses nothing. Open the Black Vault window (unlocked with your main password) to read or delete saved chats. They are locked with a separate key that only your main password opens: the review-only password cannot see them. They live in this browser on this computer; clearing site data deletes them. The AI provider you chat with (Groq or Gemini) still receives the messages while you talk.
