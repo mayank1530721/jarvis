@@ -62,3 +62,6 @@ In a Black Vault private chat a "Switch to FRIDAY / JARVIS" button appears in th
 
 ## Every private chat is saved
 Each private chat is kept in full, encrypted, in your Black Vault, and saved again after every reply, so closing the tab loses nothing. Open the Black Vault window (unlocked with your main password) to read or delete saved chats. They are locked with a separate key that only your main password opens: the review-only password cannot see them. They live in this browser on this computer; clearing site data deletes them. The AI provider you chat with (Groq or Gemini) still receives the messages while you talk.
+
+## Storage
+Everything is kept in your browser's IndexedDB (hundreds of MB instead of the old ~5 MB), and the page asks the browser to mark it permanent. Data from older versions moves over by itself the first time you open this version. Settings shows what is used and has Back up / Restore buttons: a backup file holds chats, memory, missions and the still-encrypted vault, and leaves out API keys, tokens and the desktop agent address. Saved private chats can now take up to about 200 MB.

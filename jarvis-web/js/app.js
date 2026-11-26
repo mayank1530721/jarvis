@@ -1134,6 +1134,37 @@
     refreshVoiceOptions(); paintVoiceValues();
     for (const b of $("sAgentPick").children) b.classList.toggle("on", b.dataset.id === draftAgent);
   }
+  // ---------- storage info, backup and restore ----------
+  const SECRET_KEYS = /^jarvis\.(cfg|groqKey|uplika|uplikaRelay|github|agentToken|agentBase|agentprefs)$/;
+  async function renderStorageInfo() {
+    let t = J.kv.mode() === "indexeddb" ? "Stored in this browser's database (IndexedDB)." : "Stored in the browser's small localStorage (about 5 MB); IndexedDB isn't available here.";
+    try {
+      if (navigator.storage && navigator.storage.estimate) { const e = await navigator.storage.estimate(); t += " Using " + (e.usage / 1048576).toFixed(1) + " MB of about " + Math.round(e.quota / 1048576) + " MB."; }
+      if (navigator.storage && navigator.storage.persisted) t += (await navigator.storage.persisted()) ? " Marked permanent." : " Not marked permanent: the browser may clear it if your disk runs low, so make a backup now and then.";
+    } catch (e) { /* the numbers are only a nicety */ }
+    $("storageInfo").textContent = t;
+  }
+  $("backupBtn").onclick = () => {
+    const items = {}; J.kv.keys().filter(k => /^jarvis\./.test(k) && !SECRET_KEYS.test(k)).forEach(k => { items[k] = J.kv.getItem(k); });
+    const blob = new Blob([JSON.stringify({ app: "jarvis", version: 1, date: new Date().toISOString(), items })], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "jarvis-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    $("storageInfo").textContent = "Backup downloaded: " + Object.keys(items).length + " items. The Black Vault inside is still encrypted.";
+  };
+  $("restoreBtn").onclick = () => $("restoreFile").click();
+  $("restoreFile").onchange = async () => {
+    const f = $("restoreFile").files[0]; $("restoreFile").value = ""; if (!f) return;
+    try {
+      const d = JSON.parse(await f.text());
+      if (!d || d.app !== "jarvis" || !d.items || typeof d.items !== "object") throw new Error("That file is not a JARVIS backup.");
+      const keys = Object.keys(d.items).filter(k => /^jarvis\./.test(k) && !SECRET_KEYS.test(k) && typeof d.items[k] === "string");
+      if (!keys.length) throw new Error("The backup has nothing to restore.");
+      if (!window.confirm("Restore " + keys.length + " items from this backup? They replace the matching data in this browser (your API keys are kept).")) return;
+      for (const k of keys) await J.kv.setAsync(k, d.items[k]);
+      $("storageInfo").textContent = "Restored. Reloading…"; setTimeout(() => location.reload(), 600);
+    } catch (e) { $("storageInfo").textContent = "Restore failed: " + e.message; }
+  };
+  window.addEventListener("jarvis-storage-error", e => { add("sys", "Could not save to this browser's storage: " + ((e.detail) || "unknown error") + ". Make a backup from Settings."); });
   $("setBtn").onclick = () => {
     const c = cfg();
     $("sKey").value = c.key; $("sGroq").value = store.get("jarvis.groqKey", ""); $("sChime").checked = chimeOn(); $("sModel").value = c.model; $("sBase").value = c.base; $("sFallbacks").value = c.fallbacks; $("sName").value = c.name; $("sUplika").value = uplikaKey(); $("sGithub").value = ghToken(); $("sAgentToken").value = handsToken(); $("sAgentBase").value = String(store.get("jarvis.agentBase", "") || ""); $("sRelay").value = J.uplika.relay;
@@ -1146,7 +1177,7 @@
       pick.append(b);
     }
     draftToForm();
-    $("settings").showModal();
+    renderStorageInfo(); $("settings").showModal();
   };
   $("sCancel").onclick = () => $("settings").close();
   $("sRate").oninput = paintVoiceValues; $("sPitch").oninput = paintVoiceValues;
@@ -1400,4 +1431,5 @@
 
   // Handy for debugging in the browser console.
   J.app = { S, switchAgent, send };
+  document.body.dataset.ready = "1";   // storage is loaded and the app is wired up
 })();

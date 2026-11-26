@@ -1,6 +1,6 @@
 // Keeps the Jarvis page available offline.
 // Online: always fetch the newest file and refresh the saved copy. Offline: use the saved copy.
-const CACHE = "jarvis-page-v36";
+const CACHE = "jarvis-page-v37";
 const SHELL = [
   "./", "./index.html", "./css/theme.css", "./css/app.css",
   "./js/util.js", "./js/agents.js", "./js/intent.js", "./js/council.js", "./js/uplika.js", "./js/github.js", "./js/hands.js", "./js/research.js", "./js/memory.js", "./js/mission.js", "./js/vault.js", "./js/voice.js", "./js/model.js", "./js/cores.js", "./js/app.js"

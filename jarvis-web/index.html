@@ -180,6 +180,11 @@
     <button id="sPreview" type="button">&#9654; Preview voice</button>
     <small>Automatic picks the best-matching male English voice installed on your computer. Choose one by hand if you prefer; which voices exist depends on your system.</small>
   </div>
+  <div class="sec" id="storageSec"><label>Storage</label>
+    <small id="storageInfo">Checking…</small>
+    <div class="drow"><button id="backupBtn" type="button">Back up everything</button><button id="restoreBtn" type="button">Restore from backup</button><input type="file" id="restoreFile" accept="application/json,.json" hidden></div>
+    <small>A backup holds chats, memory, missions and the encrypted vault. API keys, tokens and the desktop agent address are left out, so keep those yourself.</small>
+  </div>
   <div class="drow"><button id="sCancel" type="button">Cancel</button><button class="primary" id="sSave" type="button">Save</button></div>
 </dialog>
 
@@ -257,19 +262,9 @@
 </dialog>
 
 <script src="js/util.js"></script>
-<script src="js/vault.js"></script>
-<script src="js/agents.js"></script>
-<script src="js/intent.js"></script>
-<script src="js/council.js"></script>
-<script src="js/uplika.js"></script>
-<script src="js/github.js"></script>
-<script src="js/hands.js"></script>
-<script src="js/research.js"></script>
-<script src="js/memory.js"></script>
-<script src="js/mission.js"></script>
-<script src="js/voice.js"></script>
-<script src="js/model.js"></script>
-<script src="js/cores.js"></script>
-<script src="js/app.js"></script>
+<script>
+// Everything else waits until storage is loaded, so no part of the app reads data before it is there.
+(function(){var f=["vault.js", "agents.js", "intent.js", "council.js", "uplika.js", "github.js", "hands.js", "research.js", "memory.js", "mission.js", "voice.js", "model.js", "cores.js", "app.js"],i=0;function next(){if(i>=f.length)return;var el=document.createElement("script");el.src="js/"+f[i++];el.onload=next;el.onerror=next;document.body.appendChild(el)}J.storageReady.then(next,next)})();
+</script>
 </body>
 </html>
