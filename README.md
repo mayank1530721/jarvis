@@ -52,7 +52,7 @@ Miniclips is a window-only Windows app and has no command line, API or watch fol
 
 ## Clip desk (VISION and ULTRON)
 Ask VISION (or ULTRON) for clips and he runs the pipeline on your computer through the desktop agent: search YouTube (no key; Creative Commons filter available), download one video with its captions, pick the best moments from the transcript, and cut them (optionally vertical 9:16) into `clips/`. Then ask FRIDAY to caption and post them.
-- Needs `yt-dlp` and `ffmpeg` installed (Windows: `winget install yt-dlp` and `winget install Gyan.FFmpeg`), and the desktop agent token in Settings.
+- Needs `yt-dlp` and `ffmpeg` installed (Windows: `winget install yt-dlp.yt-dlp` and `winget install Gyan.FFmpeg`), and the desktop agent token in Settings.
 - Every download and cut asks for your approval. Every post asks for your approval.
 - He works from the video's captions, not by watching it. Videos with no captions can't be judged yet (no speech-to-text fallback is built).
 - Only use sources you may clip: campaign sources, your own videos, Creative Commons.

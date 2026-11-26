@@ -13,7 +13,7 @@ class ClipError(Exception):
 
 def need(tool):
     if not shutil.which(tool):
-        raise ClipError("%s is not installed on this computer. Install it first (Windows: winget install %s)." % (tool, {"yt-dlp": "yt-dlp", "ffmpeg": "Gyan.FFmpeg"}[tool]))
+        raise ClipError("%s is not installed on this computer. Install it first (Windows: winget install %s)." % (tool, {"yt-dlp": "yt-dlp.yt-dlp", "ffmpeg": "Gyan.FFmpeg"}[tool]))
 
 
 def _run(args, timeout):
