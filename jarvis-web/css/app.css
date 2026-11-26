@@ -368,3 +368,10 @@ body[data-agent="vision"] .stage {
 #vaultCreate,#vaultUnlockBtn,#vaultReviewBtn{margin-top:8px;width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;color:var(--text);background:rgba(176,110,255,.12);cursor:pointer}
 #vaultContent[hidden],#vaultSetup[hidden],#vaultUnlock[hidden]{display:none}
 #vaultNotes[readonly]{opacity:.82}
+
+.vault-chats{display:flex;flex-direction:column;gap:6px;max-height:160px;overflow:auto;margin:6px 0}
+.vault-chats .vc-row{display:flex;gap:6px;align-items:center}
+.vault-chats .vc-row button{flex:1;text-align:left;font-size:12px}
+.vault-chats .vc-row .vc-del{flex:0 0 auto;text-align:center}
+.vault-chatview{white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto;font:12px/1.5 inherit;padding:8px;border:1px solid rgba(176,110,255,.35);border-radius:8px;margin:6px 0}
+#vaultChats[hidden],.vault-chatview[hidden]{display:none!important}
