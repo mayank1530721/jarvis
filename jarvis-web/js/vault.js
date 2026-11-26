@@ -1,26 +1,25 @@
 (function(root){
 "use strict";
-var J=root.J=root.J||{},KEY="jarvis.blackVault.v1",ROUNDS=310000,master=null,mode=null,notes=[],chats=[],chatKey=null,creating=false,MAX_CHAT_BYTES=3500000;
+var J=root.J=root.J||{},KEY="jarvis.blackVault.v1",ROUNDS=310000,master=null,mode=null,notes=[],chats=[],chatKey=null,creating=false,MAX_CHAT_BYTES=3500000;function chatLimit(){return J.kv&&J.kv.mode()==="indexeddb"?200000000:MAX_CHAT_BYTES}
 function enc(s){return new TextEncoder().encode(String(s))}
 function b64(a){var s="";for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s)}
 function un64(s){var x=atob(s),a=new Uint8Array(x.length);for(var i=0;i<x.length;i++)a[i]=x.charCodeAt(i);return a}
 function rand(n){var a=new Uint8Array(n);root.crypto.getRandomValues(a);return a}
 function report(fn,message){if(typeof fn==="function")fn(message)}
 function readVault(){
-  try{var raw=root.localStorage.getItem(KEY);return raw?JSON.parse(raw):null}
+  try{var raw=J.kv.getItem(KEY);return raw?JSON.parse(raw):null}
   catch(e){throw Error("Browser storage is unavailable or blocked. Allow site data for this JARVIS site and try again.")}
 }
-function writeVault(value){
+async function writeVault(value){
   var serialized=JSON.stringify(value);
   var previous=null;
-  try{previous=root.localStorage.getItem(KEY)}catch(ignore){}
+  try{previous=J.kv.getItem(KEY)}catch(ignore){}
   try{
-    root.localStorage.setItem(KEY,serialized);
-    var check=root.localStorage.getItem(KEY);
-    if(check!==serialized)throw Error("Storage verification failed.");
+    await J.kv.setAsync(KEY,serialized);
+    if(J.kv.getItem(KEY)!==serialized)throw Error("Storage verification failed.");
   }catch(e){
     // A failed save must never destroy what was already stored: put the previous copy back.
-    try{if(previous===null)root.localStorage.removeItem(KEY);else root.localStorage.setItem(KEY,previous)}catch(ignore){}
+    try{if(previous===null)J.kv.removeItem(KEY);else await J.kv.setAsync(KEY,previous)}catch(ignore){}
     throw Error("Could not save the encrypted vault in this browser. Check that site storage is enabled and has free space. "+(e&&e.message?e.message:""));
   }
 }
@@ -63,7 +62,7 @@ async function setup(p,r,onProgress){
     var craw=rand(32);
     record.chatWrap=await wrap(p,craw);
     chatKey=await root.crypto.subtle.importKey("raw",craw,{name:"AES-GCM"},false,["encrypt","decrypt"]);
-    writeVault(record);
+    await writeVault(record);
     master=key;mode="private";notes=[];chats=[];
     return true;
   }finally{creating=false}
@@ -84,7 +83,7 @@ async function unlock(p,m){
     else{craw=rand(32);v.chatWrap=await wrap(p,craw)}
     ck=await root.crypto.subtle.importKey("raw",craw,{name:"AES-GCM"},false,["encrypt","decrypt"]);
     if(v.chats){c=await decrypt(ck,v.chats);if(!Array.isArray(c))throw Error("Saved chats are invalid.")}
-    if(!readVault().chatWrap)writeVault(v);
+    if(!readVault().chatWrap)await writeVault(v);
   }
   master=k;chatKey=ck;mode=m==="review"?"review":"private";notes=n;chats=c;
   return{mode:mode,notes:notes.slice()};
@@ -95,7 +94,7 @@ async function save(n){
   var v=readVault();
   if(!v||v.version!==1)throw Error("The encrypted vault record is missing.");
   v.data=await encrypt(master,n);
-  writeVault(v);notes=n.slice();return true;
+  await writeVault(v);notes=n.slice();return true;
 }
 
 // ---- saved private chats (full transcripts, encrypted with the same key, stored beside the notes) ----
@@ -107,10 +106,10 @@ async function writeChats(next){
   if(!master||mode!=="private")throw Error("Unlock with the vault password to edit.");
   var v=readVault();
   if(!v||v.version!==1)throw Error("The encrypted vault record is missing.");
-  if(JSON.stringify(next).length>MAX_CHAT_BYTES)throw Error("The vault has no room for more saved chats. Delete some old chats in the Black Vault window first.");
+  if(JSON.stringify(next).length>chatLimit())throw Error("The vault has no room for more saved chats. Delete some old chats in the Black Vault window first.");
   if(!chatKey)throw Error("The chat key is not available. Unlock again.");
   v.chats=await encrypt(chatKey,next);
-  writeVault(v);chats=next;return true;
+  await writeVault(v);chats=next;return true;
 }
 // Adds a chat, or replaces the one with the same id (so a chat can be saved again after every reply).
 async function saveChat(chat){
