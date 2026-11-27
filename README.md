@@ -65,3 +65,6 @@ Each private chat is kept in full, encrypted, in your Black Vault, and saved aga
 
 ## Storage
 Everything is kept in your browser's IndexedDB (hundreds of MB instead of the old ~5 MB), and the page asks the browser to mark it permanent. Data from older versions moves over by itself the first time you open this version. Settings shows what is used and has Back up / Restore buttons: a backup file holds chats, memory, missions and the still-encrypted vault, and leaves out API keys, tokens and the desktop agent address. Saved private chats can now take up to about 200 MB.
+
+## Interface touches
+Quick-action buttons above the message box (they change with the agent; ones ending in … only fill the box), a Copy button on every message, `/` to jump to the message box, and a "New messages" button when you've scrolled up.

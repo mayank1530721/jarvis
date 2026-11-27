@@ -133,7 +133,7 @@
       if (text[i] === "\n") i++;
     }
   }
-  function setBubble(b, text) { if (b.classList.contains("ai")) renderRich(b, text); else b.textContent = text; }
+  function setBubble(b, text) { if (b.classList.contains("ai")) { renderRich(b, text); if (text) addCopy(b); } else b.textContent = text; }
   function add(cls, text) {
     const d = el("div", "msg " + cls);
     setBubble(d, text);
@@ -350,7 +350,49 @@
     $("hudL").textContent = a.hudL; $("hudR").textContent = a.hudR;
     $("box").placeholder = a.placeholder; document.title = a.name;
   }
-  function renderAll() { renderChrome(); renderVitals(); renderMemList(); renderActivity(); renderTimers(); renderAgents(); renderProjects(); renderPanels(); renderHistory(); }
+  // ---------- quick actions, copy, shortcuts ----------
+  // A chip ending in "..." only fills the box so you can finish the sentence; the others send straight away.
+  const CHIPS = {
+    jarvis: ["What can you do?", "Set a timer for 10 minutes", "Remember that ...", "Get ULTRON", "Get FRIDAY"],
+    ultron: ["Roast my idea ...", "Write a script for a Roblox video about ...", "Look in my workspace folder", "Stand down"],
+    friday: ["What is on my plate today?", "Show my clips and caption them", "Draft a post about ...", "Stand down"],
+    khonshu: ["Poke holes in this plan: ...", "Is this worth my time? ...", "Stand down"],
+    vision: ["Find a long video about ... and make clips", "Look up ...", "Stand down"]
+  };
+  function renderChips() {
+    const box = $("chips"); box.innerHTML = "";
+    if (S.privateChat) return;
+    for (const text of CHIPS[S.agent] || []) {
+      const b = el("button", "", text.replace(/\s*\.\.\.$/, "…")); b.type = "button";
+      b.onclick = () => {
+        const input = $("box");
+        if (/\.\.\.$|: \.\.\.$/.test(text) || text.endsWith("...")) { input.value = text.replace(/\.\.\.$/, "").replace(/\s*$/, " "); input.focus(); }
+        else { input.value = text; $("form").requestSubmit(); }
+      };
+      box.appendChild(b);
+    }
+  }
+  function addCopy(msgEl) {
+    if (msgEl.querySelector(".copy") || !/\b(ai|me)\b/.test(msgEl.className)) return;
+    const b = el("button", "copy", "Copy"); b.type = "button"; b.title = "Copy this message";
+    b.onclick = async e => {
+      e.stopPropagation();
+      const clone = msgEl.cloneNode(true); clone.querySelectorAll(".copy").forEach(x => x.remove());
+      try { await navigator.clipboard.writeText(clone.innerText.trim()); b.textContent = "Copied"; } catch (err) { b.textContent = "Press Ctrl+C"; }
+      setTimeout(() => { b.textContent = "Copy"; }, 1400);
+    };
+    msgEl.appendChild(b);
+  }
+  new MutationObserver(list => { for (const m of list) m.addedNodes.forEach(n => { if (n.nodeType === 1 && n.classList.contains("msg")) { if (n.classList.contains("ai")) { /* copy is added once the reply is done */ } else addCopy(n); } }); }).observe(log, { childList: true });
+  const toBottom = $("toBottom");
+  log.addEventListener("scroll", () => { toBottom.hidden = log.scrollHeight - log.scrollTop - log.clientHeight < 80; });
+  toBottom.onclick = () => { log.scrollTo({ top: log.scrollHeight, behavior: "smooth" }); toBottom.hidden = true; };
+  document.addEventListener("keydown", e => {
+    const t = e.target, typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+    if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector("dialog[open]")) { e.preventDefault(); $("box").focus(); }
+    else if (e.key === "Escape" && t === $("box")) $("box").blur();
+  });
+  function renderAll() { renderChips(); renderChrome(); renderVitals(); renderMemList(); renderActivity(); renderTimers(); renderAgents(); renderProjects(); renderPanels(); renderHistory(); }
 
   const jarvisBoot = Date.now();
   function tickClock() {
