@@ -375,3 +375,16 @@ body[data-agent="vision"] .stage {
 .vault-chats .vc-row .vc-del{flex:0 0 auto;text-align:center}
 .vault-chatview{white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto;font:12px/1.5 inherit;padding:8px;border:1px solid rgba(176,110,255,.35);border-radius:8px;margin:6px 0}
 #vaultChats[hidden],.vault-chatview[hidden]{display:none!important}
+
+/* quick actions, copy buttons, jump-to-newest */
+#chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 2px; }
+#chips button { background: rgba(var(--c-rgb), .07); color: var(--text); border: 1px solid rgba(var(--c-rgb), .35); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12px; cursor: pointer; transition: background .15s, border-color .15s; }
+#chips button:hover, #chips button:focus-visible { background: rgba(var(--c-rgb), .18); border-color: var(--c); outline: none; }
+#toBottom { align-self: center; margin-top: -4px; background: var(--c); color: var(--ink); border: 0; border-radius: 999px; padding: 4px 14px; font: inherit; font-size: 12px; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+#toBottom[hidden] { display: none; }
+.msg { position: relative; }
+.msg .copy { position: absolute; top: 4px; right: 6px; background: rgba(0,0,0,.45); color: var(--dim); border: 1px solid rgba(var(--c-rgb), .3); border-radius: 6px; font: inherit; font-size: 11px; padding: 1px 7px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+.msg:hover .copy, .msg .copy:focus-visible { opacity: 1; }
+@media (hover: none) { .msg .copy { opacity: .7; } }
+.msg .copy:hover { color: var(--c); border-color: var(--c); }
+@media (max-width: 760px) { #chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } #chips button { white-space: nowrap; flex: 0 0 auto; } }
